@@ -21,14 +21,14 @@ export default function LoginFormButtons({
         Continue with Google
       </Button>
 
-      <Button
+      {/* <Button
         key={"github"}
         onClick={onClickGithub}
         className="bg-[#333] text-white w-[300px]"
       >
         <IconBrandGithub size={20} />
         Continue with Github
-      </Button>
+      </Button> */}
     </div>
   );
 }

@@ -1,8 +1,0 @@
-public/web/scripts
-public/web/extensions/core
-public/web/intex.html
-ComfyUI
-comfyui-fork/web/scripts
-comfyui-fork/web/index.html
-comfyui-fork/web/extensions/core
-!comfyui-fork/web/extensions/workspace-manager
