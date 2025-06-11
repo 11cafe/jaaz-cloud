@@ -15,5 +15,13 @@ dev branch is deployed to https://dev-nodecafe.onrender.com/
 
 3. Add .env file like in .env.example
 
+4. To change postgres schema, edit schema.ts and run `npx drizzle-kit push`
+
+Using:
+
+- Nextjs for UI
+- Auth.js for login
+- Drizzle for pg ORM: https://orm.drizzle.team/docs/get-started/postgresql-new
+
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 result.
