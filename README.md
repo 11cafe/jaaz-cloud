@@ -1,8 +1,6 @@
 This is a [Next.js](https://nextjs.org/) project bootstrapped with
 [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
 
-dev branch is deployed to https://dev-nodecafe.onrender.com/
-
 ## Dev
 
 1. Install dependencies
@@ -15,7 +13,8 @@ dev branch is deployed to https://dev-nodecafe.onrender.com/
 
 3. Add .env file like in .env.example
 
-4. To change postgres schema, edit schema.ts and run `npx drizzle-kit push`
+4. To change postgres schema, edit `src/schema.ts` and run
+   `npx drizzle-kit push`
 
 Using:
 
