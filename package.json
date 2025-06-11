@@ -51,6 +51,7 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "autoprefixer": "^10.4.20",
+    "dotenv": "^16.5.0",
     "drizzle-kit": "^0.22.8",
     "eslint": "^8",
     "eslint-config-next": "14.0.2",
