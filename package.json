@@ -46,6 +46,7 @@
   "devDependencies": {
     "@types/express": "^5.0.1",
     "@types/formidable": "^3.4.5",
+    "@types/jsonwebtoken": "^9.0.9",
     "@types/node": "^20",
     "@types/pg": "^8.11.13",
     "@types/react": "^18",

@@ -4,6 +4,7 @@ import {
   timestamp,
   text,
   integer,
+  bigint,
   index,
   uniqueIndex,
   decimal,
@@ -113,8 +114,18 @@ export const UserSchema = pgTable(
 //   },
 // );
 
+export const DeviceAuthRequestSchema = pgTable("device_auth_requests", {
+  device_code: text("device_code").primaryKey().notNull(),
+  user_id: integer("user_id"),
+  access_token: text("access_token"),
+  status: text("status").notNull(), // 'pending' | 'authorized' | 'expired'
+  expires_at: bigint("expires_at", { mode: "number" }).notNull(), // 存储时间戳（毫秒）
+  created_at: bigint("created_at", { mode: "number" }).notNull(), // 存储时间戳（毫秒）
+});
+
 export const schemas = {
   user: UserSchema,
+  device_auth_requests: DeviceAuthRequestSchema,
   // apikey: ApiKeySchema,
   // account: AccountSchema,
   // transactions: TransactionsSchema,
