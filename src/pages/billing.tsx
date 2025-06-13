@@ -277,15 +277,17 @@ export default function Billing() {
             </div>
 
             {/* Mock consume button - commented out */}
-            {/* <Button
-              disabled={!rechargeAmount || inputError}
-              size="lg"
-              onClick={() => {
-                handleConsume(20, TransactionType.CONSUME, "consume-20");
-              }}
-            >
-              mock consume
-            </Button> */}
+            {isDev && (
+              <Button
+                disabled={!rechargeAmount || inputError}
+                size="lg"
+                onClick={() => {
+                  handleConsume(1, TransactionType.CONSUME, "consume-1");
+                }}
+              >
+                mock consume
+              </Button>
+            )}
           </CardContent>
         </Card>
       </div>
