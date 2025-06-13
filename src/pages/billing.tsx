@@ -31,6 +31,7 @@ export default function Billing() {
   const [rechargeAmount, setRechargeAmount] = useState<number | string>(10);
   const [rechargeLoading, setRechargeLoading] = useState(false);
   const rechargeResultCheckTime = useRef(0);
+  const isDev = process.env.NODE_ENV === "development";
 
   const swrFetcherNeedSignIn = (url: string) =>
     fetch(url).then((res) => {
@@ -72,7 +73,22 @@ export default function Billing() {
     }).then((res) => res.json());
 
     if (response.success && response.url) {
-      window.location.href = response.url;
+      // Check if it's dev mode (simulated recharge)
+      if (response.devMode) {
+        // In dev mode, directly refresh balance and show success
+        mutate("/api/billing/getBalance");
+        mutate(
+          `/api/billing/listTransactions?pageSize=${defaultPageSize}&pageNumber=1`,
+        );
+        toast({
+          title: "Recharge successful (Dev Mode)",
+          description: response.message || "Development mode recharge completed",
+          variant: "success",
+        });
+      } else {
+        // Production mode: redirect to Stripe
+        window.location.href = response.url;
+      }
     } else {
       toast({
         title: "Recharge failure",
@@ -153,7 +169,14 @@ export default function Billing() {
             <Separator />
 
             <div>
-              <h3 className="text-lg font-medium mb-4">Add Funds</h3>
+              <div className="flex items-center gap-2 mb-4">
+                <h3 className="text-lg font-medium">Add Funds</h3>
+                {isDev && (
+                  <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
+                    Dev Mode
+                  </span>
+                )}
+              </div>
 
               <div className="flex flex-wrap items-start gap-4 mb-4">
                 {/* Quick Amount Buttons */}

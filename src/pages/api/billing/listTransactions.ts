@@ -1,6 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/pages/api/auth/[...nextauth]";
+import { authenticateRequest } from "@/utils/auth";
 import { TransactionsSchema } from "@/schema";
 import { eq, desc, and } from "drizzle-orm";
 import { drizzleDb } from "@/server/db-adapters/PostgresAdapter";
@@ -10,11 +9,12 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
 ) {
-  const session = await getServerSession(req, res, authOptions);
-  if (!session?.user.id) {
-    res.status(401).json({ error: "Unauthorized! Please loggin." });
-    return;
+  const authResult = await authenticateRequest(req, res);
+  if (!authResult) {
+    return; // authenticateRequest already sent error response
   }
+
+  const { userId } = authResult;
 
   try {
     const pageSize = parseInt(req.query.pageSize as string) || 10;
@@ -24,10 +24,10 @@ export default async function handler(
 
     const whereList = stripeSessionID
       ? and(
-          eq(TransactionsSchema.author_id, session?.user.id),
+          eq(TransactionsSchema.author_id, userId),
           eq(TransactionsSchema.stripe_session_id, stripeSessionID),
         )
-      : eq(TransactionsSchema.author_id, session?.user.id);
+      : eq(TransactionsSchema.author_id, userId);
 
     const row = await drizzleDb
       .select()
