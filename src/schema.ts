@@ -61,58 +61,58 @@ export const UserSchema = pgTable(
 //   },
 // );
 
-// export const AccountSchema = pgTable("account", {
-//   id: integer("id")
-//     .primaryKey()
-//     .references(() => UserSchema.id)
-//     .notNull(),
-//   balance: decimal("balance", { precision: 10, scale: 2 }).notNull(),
-//   updatedAt: timestamp("updated_at", {
-//     precision: 3,
-//     mode: "string",
-//   })
-//     .defaultNow()
-//     .notNull(),
-// });
+export const AccountSchema = pgTable("account", {
+  id: integer("id")
+    .primaryKey()
+    .references(() => UserSchema.id)
+    .notNull(),
+  balance: decimal("balance", { precision: 10, scale: 2 }).notNull(),
+  updatedAt: timestamp("updated_at", {
+    precision: 3,
+    mode: "string",
+  })
+    .defaultNow()
+    .notNull(),
+});
 
-// export const TransactionsSchema = pgTable(
-//   "transactions",
-//   {
-//     id: text("id").primaryKey().notNull(),
-//     author_id: text("author_id").references(() => UserSchema.id),
-//     amount: decimal("amount", { precision: 100, scale: 2 }).notNull(),
-//     stripe_session_id: text("stripe_session_id"),
-//     transaction_type: text("transaction_type")
-//       .$type<TransactionType>()
-//       .notNull(),
-//     created_at: timestamp("created_at", {
-//       precision: 3,
-//       mode: "string",
-//     })
-//       .defaultNow()
-//       .notNull(),
-//     previous_balance: decimal("previous_balance", {
-//       precision: 100,
-//       scale: 2,
-//     }).notNull(),
-//     after_balance: decimal("after_balance", {
-//       precision: 100,
-//       scale: 2,
-//     }).notNull(),
-//     description: text("description"),
-//   },
-//   (table) => {
-//     return {
-//       authorID_idx: index("transactions_authorid_idx").on(table.author_id),
-//       stripeSessionID_idx: index("transactions_stripe_session_id_idx").on(
-//         table.stripe_session_id,
-//       ),
-//       transactionType_idx: index("transactions_transaction_type_idx").on(
-//         table.transaction_type,
-//       ),
-//     };
-//   },
-// );
+export const TransactionsSchema = pgTable(
+  "transactions",
+  {
+    id: text("id").primaryKey().notNull(),
+    author_id: integer("author_id").references(() => UserSchema.id),
+    amount: decimal("amount", { precision: 100, scale: 2 }).notNull(),
+    stripe_session_id: text("stripe_session_id"),
+    transaction_type: text("transaction_type")
+      .$type<TransactionType>()
+      .notNull(),
+    created_at: timestamp("created_at", {
+      precision: 3,
+      mode: "string",
+    })
+      .defaultNow()
+      .notNull(),
+    previous_balance: decimal("previous_balance", {
+      precision: 100,
+      scale: 2,
+    }).notNull(),
+    after_balance: decimal("after_balance", {
+      precision: 100,
+      scale: 2,
+    }).notNull(),
+    description: text("description"),
+  },
+  (table) => {
+    return {
+      authorID_idx: index("transactions_authorid_idx").on(table.author_id),
+      stripeSessionID_idx: index("transactions_stripe_session_id_idx").on(
+        table.stripe_session_id,
+      ),
+      transactionType_idx: index("transactions_transaction_type_idx").on(
+        table.transaction_type,
+      ),
+    };
+  },
+);
 
 export const DeviceAuthRequestSchema = pgTable("device_auth_requests", {
   device_code: text("device_code").primaryKey().notNull(),
@@ -126,7 +126,6 @@ export const DeviceAuthRequestSchema = pgTable("device_auth_requests", {
 export const schemas = {
   user: UserSchema,
   device_auth_requests: DeviceAuthRequestSchema,
-  // apikey: ApiKeySchema,
-  // account: AccountSchema,
-  // transactions: TransactionsSchema,
+  account: AccountSchema,
+  transactions: TransactionsSchema,
 };

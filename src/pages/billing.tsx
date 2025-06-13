@@ -4,23 +4,26 @@ import {
   ButtonGroup,
   Heading,
   HStack,
-  InputGroup,
-  useToast,
   Flex,
-  InputLeftElement,
   Input,
-  FormControl,
-  FormErrorMessage,
+  VStack,
+  Spinner,
+  InputGroup,
+} from "@chakra-ui/react";
+import { useToast } from "@chakra-ui/toast";
+import {
   Table,
   Tbody,
   Td,
   Th,
   Thead,
-  Tr,
-  VStack,
-  Divider,
-  Spinner,
-} from "@chakra-ui/react";
+  Tr
+} from "@chakra-ui/table";
+import {
+  FormControl,
+  FormErrorMessage,
+} from "@chakra-ui/form-control";
+import { Divider } from "@chakra-ui/layout";
 import { ChangeEvent, useEffect, useState, useRef } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import Paginator from "@/components/Paginator";
@@ -152,7 +155,7 @@ export default function Billing() {
 
   return (
     <Box p={8} w="100%">
-      <VStack spacing={8}>
+      <VStack gap={8}>
         <Box w="100%" p={8} borderWidth={1} borderRadius="lg" boxShadow="md">
           <Flex alignItems="center" mb={4}>
             <Heading size="lg" mb={0}>
@@ -164,8 +167,8 @@ export default function Billing() {
           <Heading size="md" mb={4}>
             Add Funds
           </Heading>
-          <HStack spacing={4} mb={4}>
-            <ButtonGroup size="lg" isAttached>
+          <HStack gap={4} mb={4}>
+            <ButtonGroup size="lg" variant="outline">
               {[5, 10, 15, 20].map((val) => (
                 <Button
                   key={val}
@@ -177,14 +180,7 @@ export default function Billing() {
               ))}
             </ButtonGroup>
             <FormControl isInvalid={inputError}>
-              <InputGroup size="lg">
-                <InputLeftElement
-                  pointerEvents="none"
-                  color="gray.300"
-                  fontSize="1.2em"
-                >
-                  $
-                </InputLeftElement>
+              <InputGroup>
                 <Input
                   type="number"
                   step={1}
@@ -194,6 +190,8 @@ export default function Billing() {
                     onAmountChange(Number(e.target.value))
                   }
                   maxW="220px"
+                  placeholder="Enter amount ($)"
+                  size="lg"
                 />
               </InputGroup>
               {inputError && (
@@ -204,13 +202,12 @@ export default function Billing() {
             </FormControl>
           </HStack>
           <Button
-            isDisabled={!rechargeAmount || inputError || rechargeLoading}
-            isLoading={rechargeLoading}
+            disabled={!rechargeAmount || inputError || rechargeLoading}
             colorScheme="purple"
             size="lg"
             onClick={handleRecharge}
           >
-            Confirm Top-up
+            {rechargeLoading ? "Processing..." : "Confirm Top-up"}
           </Button>
         </Box>
         <Box w="100%" p={8} borderWidth={1} borderRadius="lg" boxShadow="md">

@@ -11,6 +11,11 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@chakra-ui/form-control": "^2.2.0",
+    "@chakra-ui/layout": "^2.3.1",
+    "@chakra-ui/react": "^3.21.0",
+    "@chakra-ui/table": "^2.1.0",
+    "@chakra-ui/toast": "^7.0.2",
     "@headlessui/react": "^1.7.17",
     "@heroicons/react": "^2.0.18",
     "@radix-ui/react-slot": "^1.1.0",
