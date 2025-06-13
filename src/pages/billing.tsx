@@ -22,6 +22,7 @@ import useIsFirstRender from "@/components/hooks/useIsFirstRender";
 import { defaultPageSize } from "@/utils/consts";
 import { ERechargePaymentState } from "@/consts/types";
 import { handleConsume } from "@/utils/handleConsume";
+import { formatToLocalTime } from "@/utils/datatimeUtils";
 
 export default function Billing() {
   const { toast } = useToast();
@@ -248,7 +249,7 @@ export default function Billing() {
                 {transactions.length > 0 ? (
                   transactions.map((item: Transaction) => (
                     <TableRow key={item.id}>
-                      <TableCell>{item.created_at}</TableCell>
+                      <TableCell>{formatToLocalTime(item.created_at)}</TableCell>
                       <TableCell>{item.transaction_type}</TableCell>
                       <TableCell>{item.amount}</TableCell>
                       <TableCell>{item.description ?? "--"}</TableCell>
