@@ -4,10 +4,8 @@ import Head from "next/head";
 import { SessionProvider } from "next-auth/react";
 import { SWRConfig } from "swr";
 import { swrLocalStorageProvider } from "@/utils/swrutils";
-import { ChakraProvider, createSystem, defaultConfig } from "@chakra-ui/react";
+import { Toaster } from "@/components/ui/toaster";
 import "@/global.css";
-
-const system = createSystem(defaultConfig);
 
 export default function App({
   Component,
@@ -23,19 +21,18 @@ export default function App({
         <link rel="shortcut icon" href="../../favicon.ico" />
       </Head>
 
-      <ChakraProvider value={system}>
-        <SWRConfig value={{ provider: swrLocalStorageProvider }}>
-          <SessionProvider session={session}>
-            {(Component as { noLayout?: boolean }).noLayout ? (
+      <SWRConfig value={{ provider: swrLocalStorageProvider }}>
+        <SessionProvider session={session}>
+          {(Component as { noLayout?: boolean }).noLayout ? (
+            <Component {...pageProps} />
+          ) : (
+            <Layout>
               <Component {...pageProps} />
-            ) : (
-              <Layout>
-                <Component {...pageProps} />
-              </Layout>
-            )}
-          </SessionProvider>
-        </SWRConfig>
-      </ChakraProvider>
+            </Layout>
+          )}
+          <Toaster />
+        </SessionProvider>
+      </SWRConfig>
     </>
   );
 }

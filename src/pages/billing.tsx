@@ -1,31 +1,20 @@
-import {
-  Box,
-  Button,
-  ButtonGroup,
-  Heading,
-  HStack,
-  Flex,
-  Input,
-  VStack,
-  Spinner,
-  InputGroup,
-} from "@chakra-ui/react";
-import { useToast } from "@chakra-ui/toast";
-import {
-  Table,
-  Tbody,
-  Td,
-  Th,
-  Thead,
-  Tr
-} from "@chakra-ui/table";
-import {
-  FormControl,
-  FormErrorMessage,
-} from "@chakra-ui/form-control";
-import { Divider } from "@chakra-ui/layout";
 import { ChangeEvent, useEffect, useState, useRef } from "react";
 import useSWR, { useSWRConfig } from "swr";
+import { signIn } from "next-auth/react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/components/ui/use-toast";
+import Spinner from "@/components/ui/Spinner";
 import Paginator from "@/components/Paginator";
 import { Transaction } from "@/server/dbTypes";
 import { TransactionType } from "@/schema";
@@ -33,16 +22,16 @@ import useIsFirstRender from "@/components/hooks/useIsFirstRender";
 import { defaultPageSize } from "@/utils/consts";
 import { ERechargePaymentState } from "@/consts/types";
 import { handleConsume } from "@/utils/handleConsume";
-import { signIn } from "next-auth/react";
 
 export default function Billing() {
-  const toast = useToast();
+  const { toast } = useToast();
   const isFirstRender = useIsFirstRender();
   const { mutate } = useSWRConfig();
   const [pageNumber, setPageNumber] = useState(1);
   const [rechargeAmount, setRechargeAmount] = useState<number | string>(10);
   const [rechargeLoading, setRechargeLoading] = useState(false);
   const rechargeResultCheckTime = useRef(0);
+
   const swrFetcherNeedSignIn = (url: string) =>
     fetch(url).then((res) => {
       if (res.status === 401) {
@@ -88,9 +77,7 @@ export default function Billing() {
       toast({
         title: "Recharge failure",
         description: response.error,
-        status: "warning",
-        duration: 10000,
-        isClosable: true,
+        variant: "warning",
       });
     }
     setRechargeLoading(false);
@@ -107,9 +94,7 @@ export default function Billing() {
       );
       toast({
         title: "Recharge successful",
-        status: "success",
-        duration: 3000,
-        isClosable: true,
+        variant: "success",
       });
     } else if (rechargeResultCheckTime.current < 5) {
       // Sometimes when recharge is successful, the deposit is slow, resulting in failure to effectively update the balance.
@@ -133,9 +118,7 @@ export default function Billing() {
         case ERechargePaymentState.CANCEL:
           toast({
             title: "Recharge canceled",
-            status: "info",
-            duration: 3000,
-            isClosable: true,
+            variant: "info",
           });
           break;
       }
@@ -154,117 +137,134 @@ export default function Billing() {
   }
 
   return (
-    <Box p={8} w="100%">
-      <VStack gap={8}>
-        <Box w="100%" p={8} borderWidth={1} borderRadius="lg" boxShadow="md">
-          <Flex alignItems="center" mb={4}>
-            <Heading size="lg" mb={0}>
-              Balance: ${balance}
-            </Heading>
-            {isBalanceValidating && <Spinner ml={2} size={"xs"} color="gray" />}
-          </Flex>
-          <Divider mb={4} />
-          <Heading size="md" mb={4}>
-            Add Funds
-          </Heading>
-          <HStack gap={4} mb={4}>
-            <ButtonGroup size="lg" variant="outline">
-              {[5, 10, 15, 20].map((val) => (
-                <Button
-                  key={val}
-                  onClick={() => setRechargeAmount(val)}
-                  colorScheme={rechargeAmount === val ? "purple" : "gray"}
-                >
-                  ${val}
-                </Button>
-              ))}
-            </ButtonGroup>
-            <FormControl isInvalid={inputError}>
-              <InputGroup>
-                <Input
-                  type="number"
-                  step={1}
-                  value={rechargeAmount}
-                  min={5}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                    onAmountChange(Number(e.target.value))
-                  }
-                  maxW="220px"
-                  placeholder="Enter amount ($)"
-                  size="lg"
-                />
-              </InputGroup>
-              {inputError && (
-                <FormErrorMessage position="absolute">
-                  Minimum top-up: $5
-                </FormErrorMessage>
-              )}
-            </FormControl>
-          </HStack>
-          <Button
-            disabled={!rechargeAmount || inputError || rechargeLoading}
-            colorScheme="purple"
-            size="lg"
-            onClick={handleRecharge}
-          >
-            {rechargeLoading ? "Processing..." : "Confirm Top-up"}
-          </Button>
-        </Box>
-        <Box w="100%" p={8} borderWidth={1} borderRadius="lg" boxShadow="md">
-          <Heading size="md" mb={4}>
-            Recent Transactions
-            {isTransactionValidating && (
-              <Spinner ml={2} size={"xs"} color="gray" />
-            )}
-          </Heading>
-          <Table variant="simple">
-            <Thead>
-              <Tr>
-                <Th>Time</Th>
-                <Th>Type</Th>
-                <Th>Amount</Th>
-                <Th>Description</Th>
-              </Tr>
-            </Thead>
-            <Tbody>
-              {transactions.length > 0 ? (
-                transactions.map((item: Transaction) => (
-                  <Tr key={item.id}>
-                    <Td>{item.created_at}</Td>
-                    <Td>{item.transaction_type}</Td>
-                    <Td>{item.amount}</Td>
-                    <Td>{item.description ?? "--"}</Td>
-                  </Tr>
-                ))
-              ) : (
-                <Tr>
-                  <Td colSpan={5} textAlign="center">
-                    {isTransactionValidating
-                      ? "Loading"
-                      : "No transactions found"}
-                  </Td>
-                </Tr>
-              )}
-            </Tbody>
-          </Table>
-          <Paginator
-            onPageChange={setPageNumber}
-            pageNumber={pageNumber}
-            loading={isTransactionValidating}
-            noMoreData={transactions.length === 0}
-          />
-          {/* <Button
-            isDisabled={!rechargeAmount || inputError}
-            colorScheme="purple"
-            size="lg"
-            onClick={() => {
-              handleConsume(20, TransactionType.CONSUME, "consume-20");
-            }}
-          >
-            mock consume
-          </Button> */}
-        </Box>
-      </VStack>
-    </Box>
+    <div className="p-8 w-full">
+      <div className="flex flex-col gap-8">
+        {/* Balance and Add Funds Card */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-2xl">
+                Balance: ${balance}
+              </CardTitle>
+              {isBalanceValidating && <Spinner size="sm" />}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <Separator />
+
+            <div>
+              <h3 className="text-lg font-medium mb-4">Add Funds</h3>
+
+              <div className="flex flex-wrap items-start gap-4 mb-4">
+                {/* Quick Amount Buttons */}
+                <div className="flex gap-2">
+                  {[5, 10, 15, 20].map((val) => (
+                    <Button
+                      key={val}
+                      variant={rechargeAmount === val ? "default" : "outline"}
+                      size="lg"
+                      onClick={() => setRechargeAmount(val)}
+                    >
+                      ${val}
+                    </Button>
+                  ))}
+                </div>
+
+                {/* Custom Amount Input */}
+                <div className="flex flex-col">
+                  <Input
+                    type="number"
+                    step={1}
+                    value={rechargeAmount}
+                    min={5}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                      onAmountChange(Number(e.target.value))
+                    }
+                    className="w-56"
+                    placeholder="Enter amount ($)"
+                  />
+                  {inputError && (
+                    <span className="text-sm text-red-500 mt-1">
+                      Minimum top-up: $5
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <Button
+                disabled={!rechargeAmount || inputError || rechargeLoading}
+                size="lg"
+                onClick={handleRecharge}
+                isLoading={rechargeLoading}
+              >
+                {rechargeLoading ? "Processing..." : "Confirm Top-up"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Transactions Card */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-lg">Recent Transactions</CardTitle>
+              {isTransactionValidating && <Spinner size="sm" />}
+            </div>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Time</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead>Description</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {transactions.length > 0 ? (
+                  transactions.map((item: Transaction) => (
+                    <TableRow key={item.id}>
+                      <TableCell>{item.created_at}</TableCell>
+                      <TableCell>{item.transaction_type}</TableCell>
+                      <TableCell>{item.amount}</TableCell>
+                      <TableCell>{item.description ?? "--"}</TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center">
+                      {isTransactionValidating
+                        ? "Loading"
+                        : "No transactions found"}
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+
+            <div className="mt-4">
+              <Paginator
+                onPageChange={setPageNumber}
+                pageNumber={pageNumber}
+                loading={isTransactionValidating}
+                noMoreData={transactions.length === 0}
+              />
+            </div>
+
+            {/* Mock consume button - commented out */}
+            {/* <Button
+              disabled={!rechargeAmount || inputError}
+              size="lg"
+              onClick={() => {
+                handleConsume(20, TransactionType.CONSUME, "consume-20");
+              }}
+            >
+              mock consume
+            </Button> */}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
   );
 }
