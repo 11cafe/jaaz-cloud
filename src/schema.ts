@@ -119,8 +119,13 @@ export const DeviceAuthRequestSchema = pgTable("device_auth_requests", {
   user_id: integer("user_id"),
   access_token: text("access_token"),
   status: text("status").notNull(), // 'pending' | 'authorized' | 'expired'
-  expires_at: bigint("expires_at", { mode: "number" }).notNull(), // 存储时间戳（毫秒）
-  created_at: bigint("created_at", { mode: "number" }).notNull(), // 存储时间戳（毫秒）
+  expires_at: timestamp("expires_at", {
+    precision: 3,
+    mode: "string",
+  }).notNull(),
+  created_at: timestamp("created_at", { precision: 3, mode: "string" })
+    .defaultNow()
+    .notNull(),
 });
 
 export const schemas = {

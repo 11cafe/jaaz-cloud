@@ -9,8 +9,8 @@ CREATE TABLE IF NOT EXISTS "device_auth_requests" (
 	"user_id" integer,
 	"access_token" text,
 	"status" text NOT NULL,
-	"expires_at" bigint NOT NULL,
-	"created_at" bigint NOT NULL
+	"expires_at" timestamp(3) NOT NULL,
+	"created_at" timestamp(3) DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "transactions" (

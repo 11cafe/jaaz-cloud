@@ -1,5 +1,5 @@
 {
-  "id": "23a3f37e-9f57-4670-a802-4a828246d672",
+  "id": "600f8a29-abac-48b5-91e5-adb19c337d04",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -77,15 +77,16 @@
         },
         "expires_at": {
           "name": "expires_at",
-          "type": "bigint",
+          "type": "timestamp(3)",
           "primaryKey": false,
           "notNull": true
         },
         "created_at": {
           "name": "created_at",
-          "type": "bigint",
+          "type": "timestamp(3)",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {},
