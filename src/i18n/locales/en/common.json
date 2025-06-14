@@ -1,0 +1,30 @@
+{
+  "welcome": "Welcome",
+  "hello": "Hello",
+  "loading": "Loading...",
+  "error": "Error",
+  "success": "Success",
+  "cancel": "Cancel",
+  "confirm": "Confirm",
+  "save": "Save",
+  "delete": "Delete",
+  "edit": "Edit",
+  "add": "Add",
+  "search": "Search",
+  "login": "Login",
+  "logout": "Logout",
+  "register": "Register",
+  "profile": "Profile",
+  "settings": "Settings",
+  "home": "Home",
+  "dashboard": "Dashboard",
+  "back": "Back",
+  "next": "Next",
+  "previous": "Previous",
+  "submit": "Submit",
+  "close": "Close",
+  "languages": {
+    "en": "English",
+    "zh-CN": "中文"
+  }
+}

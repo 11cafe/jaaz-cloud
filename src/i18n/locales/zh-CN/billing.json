@@ -1,0 +1,20 @@
+{
+  "balance": "余额",
+  "addFunds": "充值",
+  "confirmTopUp": "确认充值",
+  "processing": "处理中...",
+  "minimumTopUp": "最低充值金额：$5",
+  "enterAmount": "输入金额 ($)",
+  "recentTransactions": "最近交易",
+  "time": "时间",
+  "type": "类型",
+  "amount": "金额",
+  "description": "描述",
+  "noTransactionsFound": "未找到交易记录",
+  "paymentSuccessful": "支付成功",
+  "accountRechargedSuccessfully": "您的账户已成功充值！",
+  "rechargeFailure": "充值失败",
+  "rechargeSuccessful": "充值成功",
+  "rechargeCanceled": "充值已取消",
+  "mockConsume": "模拟消费"
+}

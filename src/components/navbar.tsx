@@ -1,4 +1,5 @@
 import LoginButton from "./LoginButton";
+import LanguageSwitcher from "./LanguageSwitcher";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/router";
@@ -24,7 +25,7 @@ export default function Navbar() {
       <nav aria-label="Global">
         <div className="flex justify-between flex-grow px-2 md:px-3 lg:px-14 py-2 md:py-3 lg:py-4 flex-wrap w-full">
           <div className="flex gap-2 md:gap-2 lg:gap-18 flex-wrap">
-            <a href="/" className="flex flex-row">
+            <Link href="/" className="flex flex-row">
               <div className="flex items-center gap-2">
                 <img
                   width={26}
@@ -38,7 +39,7 @@ export default function Navbar() {
                   beta
                 </Badge>
               </div>
-            </a>
+            </Link>
 
             <div className="hidden md:flex">
               {navigation.map((item) => (
@@ -67,6 +68,7 @@ export default function Navbar() {
               </div>
             )}
             {/* {session && <BalanceButton />} */}
+            <LanguageSwitcher />
             <LoginButton />
           </div>
         </div>

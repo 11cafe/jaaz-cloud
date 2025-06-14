@@ -1,0 +1,20 @@
+{
+  "balance": "Balance",
+  "addFunds": "Add Funds",
+  "confirmTopUp": "Confirm Top-up",
+  "processing": "Processing...",
+  "minimumTopUp": "Minimum top-up: $5",
+  "enterAmount": "Enter amount ($)",
+  "recentTransactions": "Recent Transactions",
+  "time": "Time",
+  "type": "Type",
+  "amount": "Amount",
+  "description": "Description",
+  "noTransactionsFound": "No transactions found",
+  "paymentSuccessful": "Payment successful",
+  "accountRechargedSuccessfully": "Your account has been recharged successfully!",
+  "rechargeFailure": "Recharge failure",
+  "rechargeSuccessful": "Recharge successful",
+  "rechargeCanceled": "Recharge canceled",
+  "mockConsume": "mock consume"
+}
