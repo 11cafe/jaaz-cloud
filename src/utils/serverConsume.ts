@@ -39,11 +39,11 @@ export const serverConsume = async ({
       );
       const currentBalance = Number(accountResList[0]?.balance ?? 0);
 
-      if (currentBalance < amount) {
+      // Allow consumption as long as balance is not negative after the transaction
+      if (currentBalance < 0) {
         error = "Insufficient balance, please recharge and try again";
         throw new Error("Insufficient balance");
       }
-
       const newBalance = subtractWithPrecision(currentBalance, amount);
 
       if (accountResList.length) {

@@ -40,17 +40,17 @@ export default async function handler(
           sql`SELECT balance FROM ${AccountSchema} WHERE id = ${session.user.id} FOR UPDATE`,
         );
         const currentBalance = Number(accountResList[0]?.balance ?? 0);
-        let newBalance;
 
-        if (currentBalance < amount) {
-          res.status(403).json({
+        // Allow consumption as long as balance is not negative after the transaction
+        if (currentBalance < 0) {
+          res.status(402).json({
             success: false,
             error: "Insufficient balance, please recharge and try again",
           });
           throw new Error("Insufficient balance");
         }
 
-        newBalance = subtractWithPrecision(currentBalance, amount);
+        const newBalance = subtractWithPrecision(currentBalance, amount);
 
         if (accountResList.length) {
           await trx

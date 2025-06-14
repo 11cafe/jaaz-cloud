@@ -2,6 +2,10 @@ import { NextApiRequest, NextApiResponse } from "next";
 import { authenticateRequest } from "@/utils/auth";
 import { serverConsume } from "@/utils/serverConsume";
 import { TransactionType } from "@/schema";
+import {
+  checkUserBalance,
+  createInsufficientBalanceResponse,
+} from "@/utils/balanceCheck";
 
 // Allow streaming responses up to 90 seconds
 export const maxDuration = 90;
@@ -22,6 +26,21 @@ export default async function handler(
   }
 
   const { userId, username } = authResult;
+
+  // Check user balance before proceeding
+  const balanceCheck = await checkUserBalance(userId);
+  if (balanceCheck.error) {
+    return res.status(500).json({ error: balanceCheck.error });
+  }
+
+  if (!balanceCheck.hasBalance) {
+    console.log(
+      `Chat request blocked for user: ${username} (ID: ${userId}) - Insufficient balance: $${balanceCheck.balance}`,
+    );
+    return res
+      .status(402)
+      .json(createInsufficientBalanceResponse(balanceCheck.balance));
+  }
 
   // Get OpenRouter API key from environment variables
   const openrouterApiKey = process.env.OPENROUTER_API_KEY;

@@ -1,5 +1,9 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { authenticateRequest } from "@/utils/auth";
+import {
+  checkUserBalance,
+  createInsufficientBalanceResponse,
+} from "@/utils/balanceCheck";
 
 // Allow longer responses for image generation
 export const maxDuration = 120;
@@ -20,6 +24,21 @@ export default async function handler(
   }
 
   const { userId, username } = authResult;
+
+  // Check user balance before proceeding
+  const balanceCheck = await checkUserBalance(userId);
+  if (balanceCheck.error) {
+    return res.status(500).json({ error: balanceCheck.error });
+  }
+
+  if (!balanceCheck.hasBalance) {
+    console.log(
+      `Image generation request blocked for user: ${username} (ID: ${userId}) - Insufficient balance: $${balanceCheck.balance}`,
+    );
+    return res
+      .status(402)
+      .json(createInsufficientBalanceResponse(balanceCheck.balance));
+  }
 
   // Get Replicate API key from environment variables
   const replicateApiKey = process.env.REPLICATE_API_KEY;
