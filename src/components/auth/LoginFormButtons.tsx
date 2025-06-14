@@ -1,34 +1,30 @@
 import { Button } from "@/components/ui/button";
-import { IconBrandGithub, IconBrandGoogleFilled } from "@tabler/icons-react";
-
-const BUTTON_WIDTH = "300px";
+import { IconBrandGoogleFilled } from "@tabler/icons-react";
+import { motion } from "framer-motion";
 
 export default function LoginFormButtons({
-  onClickGithub,
   onClickGoogle,
 }: {
   onClickGoogle: () => void;
-  onClickGithub: () => void;
+  onClickGithub?: () => void;
 }) {
   return (
-    <div className="flex flex-col gap-3">
-      <Button
-        key={"google"}
-        onClick={onClickGoogle}
-        className="bg-[#CC5541] text-white w-[300px]"
+    <div className="flex flex-col gap-4">
+      <motion.div
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+        transition={{ type: "spring", stiffness: 400, damping: 17 }}
       >
-        <IconBrandGoogleFilled size={20} />
-        Continue with Google
-      </Button>
-
-      {/* <Button
-        key={"github"}
-        onClick={onClickGithub}
-        className="bg-[#333] text-white w-[300px]"
-      >
-        <IconBrandGithub size={20} />
-        Continue with Github
-      </Button> */}
+        <Button
+          onClick={onClickGoogle}
+          className="w-full h-12 bg-white hover:bg-gray-50 text-gray-900 font-medium shadow-lg hover:shadow-xl transition-all duration-200 border border-gray-300 group"
+        >
+          <div className="flex items-center justify-center gap-3">
+            <IconBrandGoogleFilled size={20} className="group-hover:scale-110 transition-transform duration-200" />
+            <span>使用 Google 继续</span>
+          </div>
+        </Button>
+      </motion.div>
     </div>
   );
 }
