@@ -1,6 +1,5 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/pages/api/auth/[...nextauth]";
+import { authenticateRequest } from "@/utils/auth";
 
 // Allow longer responses for image generation
 export const maxDuration = 120;
@@ -14,46 +13,13 @@ export default async function handler(
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  // Check authentication - allow dev session or real user session
-  const isDev = process.env.NODE_ENV === "development";
-  let userId: number | null = null;
-  let username = "anonymous";
-
-  if (isDev) {
-    // In development, create a mock dev session if no real session exists
-    try {
-      const session = await getServerSession(req, res, authOptions);
-      if (session?.user?.id) {
-        userId = session.user.id;
-        username = session.user.username || session.user.email || "user";
-      } else {
-        // Mock dev user
-        userId = 999999;
-        username = "dev-user";
-        console.log("Using mock dev session for image generation");
-      }
-    } catch (error) {
-      // Fallback to mock dev user if session check fails
-      userId = 999999;
-      username = "dev-user";
-      console.log(
-        "Session check failed, using mock dev session for image generation",
-      );
-    }
-  } else {
-    // In production, require real authentication
-    try {
-      const session = await getServerSession(req, res, authOptions);
-      if (!session?.user?.id) {
-        return res.status(401).json({ error: "Authentication required" });
-      }
-      userId = session.user.id;
-      username = session.user.username || session.user.email || "user";
-    } catch (error) {
-      console.error("Authentication error:", error);
-      return res.status(401).json({ error: "Authentication failed" });
-    }
+  // Check authentication using shared utility
+  const authResult = await authenticateRequest(req, res);
+  if (!authResult) {
+    return; // Response already sent by authenticateRequest
   }
+
+  const { userId, username } = authResult;
 
   // Get Replicate API key from environment variables
   const replicateApiKey = process.env.REPLICATE_API_KEY;
