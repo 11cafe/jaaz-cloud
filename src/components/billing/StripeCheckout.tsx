@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
 import Spinner from '@/components/ui/Spinner';
+import { useTranslation } from 'react-i18next';
 
 // 在组件渲染外部调用loadStripe，避免每次渲染都重新创建Stripe对象
 const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
@@ -30,6 +31,7 @@ function CheckoutForm({ amount, onSuccess, onCancel }: CheckoutFormProps) {
   const stripe = useStripe();
   const elements = useElements();
   const { toast } = useToast();
+  const { t } = useTranslation();
 
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -53,20 +55,20 @@ function CheckoutForm({ amount, onSuccess, onCancel }: CheckoutFormProps) {
     stripe.retrievePaymentIntent(clientSecret).then(({ paymentIntent }) => {
       switch (paymentIntent?.status) {
         case 'succeeded':
-          setMessage('Payment succeeded!');
+          setMessage(t('billing:paymentSucceeded'));
           break;
         case 'processing':
-          setMessage('Your payment is processing.');
+          setMessage(t('billing:paymentProcessing'));
           break;
         case 'requires_payment_method':
-          setMessage('Your payment was not successful, please try again.');
+          setMessage(t('billing:paymentFailed'));
           break;
         default:
-          setMessage('Something went wrong.');
+          setMessage(t('billing:somethingWentWrong'));
           break;
       }
     });
-  }, [stripe]);
+  }, [stripe, t]);
 
   /**
    * 步骤4：轮询检查支付状态
@@ -86,10 +88,10 @@ function CheckoutForm({ amount, onSuccess, onCancel }: CheckoutFormProps) {
 
       if (data.status === 'succeeded' || data.status === 'already_processed') {
         // 支付成功或已处理
-        setMessage('Payment successful!');
+        setMessage(t('billing:paymentSucceeded'));
         toast({
-          title: 'Payment successful',
-          description: 'Your account has been recharged successfully!',
+          title: t('billing:paymentSuccessful'),
+          description: t('billing:accountRechargedSuccessfully'),
           variant: 'success',
         });
         setTimeout(() => onSuccess(), 1000);
@@ -98,12 +100,12 @@ function CheckoutForm({ amount, onSuccess, onCancel }: CheckoutFormProps) {
         setTimeout(() => checkPaymentStatus(intentId), 2000);
       } else {
         // 支付失败或其他状态
-        setMessage(`Payment ${data.status}. Please try again.`);
+        setMessage(`${t('billing:paymentFailed2')} ${data.status}. ${t('billing:paymentFailed')}`);
         setIsLoading(false);
       }
     } catch (error) {
       console.error('Error checking payment status:', error);
-      setMessage('Error checking payment status');
+      setMessage(t('billing:unexpectedError'));
       setIsLoading(false);
     }
   };
@@ -121,7 +123,7 @@ function CheckoutForm({ amount, onSuccess, onCancel }: CheckoutFormProps) {
     }
 
     setIsLoading(true);
-    setMessage('Processing payment...');
+    setMessage(t('billing:processingPayment'));
 
     // 步骤3：确认支付
     const { error, paymentIntent } = await stripe.confirmPayment({
@@ -132,14 +134,14 @@ function CheckoutForm({ amount, onSuccess, onCancel }: CheckoutFormProps) {
     if (error) {
       // 支付错误处理
       if (error.type === 'card_error' || error.type === 'validation_error') {
-        setMessage(error.message || 'An unexpected error occurred.');
+        setMessage(error.message || t('billing:unexpectedError'));
       } else {
-        setMessage('An unexpected error occurred.');
+        setMessage(t('billing:unexpectedError'));
       }
 
       toast({
-        title: 'Payment failed',
-        description: error.message || 'An unexpected error occurred.',
+        title: t('billing:paymentFailed2'),
+        description: error.message || t('billing:unexpectedError'),
         variant: 'destructive',
       });
       setIsLoading(false);
@@ -150,10 +152,10 @@ function CheckoutForm({ amount, onSuccess, onCancel }: CheckoutFormProps) {
         checkPaymentStatus(paymentIntent.id);
       } else if (paymentIntent.status === 'processing') {
         // 支付处理中，开始轮询状态
-        setMessage('Payment is processing...');
+        setMessage(t('billing:paymentProcessing'));
         checkPaymentStatus(paymentIntent.id);
       } else {
-        setMessage(`Payment ${paymentIntent.status}`);
+        setMessage(`${t('billing:paymentFailed2')} ${paymentIntent.status}`);
         setIsLoading(false);
       }
     }
@@ -168,7 +170,7 @@ function CheckoutForm({ amount, onSuccess, onCancel }: CheckoutFormProps) {
     <Card className="w-full max-w-md mx-auto">
       <CardHeader>
         <CardTitle className="text-center">
-          Complete Payment - ${amount}
+          {t('billing:rechargeAmount')}${amount}
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -186,7 +188,7 @@ function CheckoutForm({ amount, onSuccess, onCancel }: CheckoutFormProps) {
               onClick={onCancel}
               className="flex-1"
             >
-              Cancel
+              {t('billing:cancel')}
             </Button>
             <Button
               disabled={isLoading || !stripe || !elements}
@@ -195,7 +197,7 @@ function CheckoutForm({ amount, onSuccess, onCancel }: CheckoutFormProps) {
               className="flex-1"
               isLoading={isLoading}
             >
-              {isLoading ? 'Processing...' : `Pay $${amount}`}
+              {isLoading ? t('billing:processingPayment') : `${t('billing:pay')} $${amount}`}
             </Button>
           </div>
 
@@ -203,7 +205,7 @@ function CheckoutForm({ amount, onSuccess, onCancel }: CheckoutFormProps) {
           {message && (
             <div
               id="payment-message"
-              className={`text-sm text-center p-2 rounded ${message.includes('succeeded')
+              className={`text-sm text-center p-2 rounded ${message.includes(t('billing:paymentSucceeded'))
                 ? 'bg-green-100 text-green-800'
                 : 'bg-red-100 text-red-800'
                 }`}
@@ -239,6 +241,7 @@ export default function StripeCheckout({ amount, onSuccess, onCancel }: StripeCh
   const [paymentIntentId, setPaymentIntentId] = useState('');
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const { t } = useTranslation();
 
   // 步骤2：组件初始化时创建支付意图
   useEffect(() => {
@@ -260,8 +263,8 @@ export default function StripeCheckout({ amount, onSuccess, onCancel }: StripeCh
         } else {
           // 创建支付意图失败
           toast({
-            title: 'Error',
-            description: data.error || 'Failed to initialize payment',
+            title: t('billing:error'),
+            description: data.error || t('billing:failedToInitializePayment'),
             variant: 'destructive',
           });
           onCancel();
@@ -271,14 +274,14 @@ export default function StripeCheckout({ amount, onSuccess, onCancel }: StripeCh
       .catch((error) => {
         console.error('Error:', error);
         toast({
-          title: 'Error',
-          description: 'Failed to initialize payment',
+          title: t('billing:error'),
+          description: t('billing:failedToInitializePayment'),
           variant: 'destructive',
         });
         onCancel();
         setLoading(false);
       });
-  }, [amount, onCancel, toast, onSuccess]);
+  }, [amount, onCancel, toast, t]);
 
   // Stripe Elements外观配置
   const appearance = {
@@ -297,7 +300,7 @@ export default function StripeCheckout({ amount, onSuccess, onCancel }: StripeCh
       <Card className="w-full max-w-md mx-auto">
         <CardContent className="flex items-center justify-center p-8">
           <Spinner size="lg" />
-          <span className="ml-2">Initializing payment...</span>
+          <span className="ml-2">{t('billing:initializingPayment')}</span>
         </CardContent>
       </Card>
     );

@@ -16,5 +16,18 @@
   "rechargeFailure": "Recharge failure",
   "rechargeSuccessful": "Recharge successful",
   "rechargeCanceled": "Recharge canceled",
-  "mockConsume": "mock consume"
+  "mockConsume": "mock consume",
+  "rechargeAmount": "Recharge Amount: ",
+  "cancel": "Cancel",
+  "pay": "Pay",
+  "processingPayment": "Processing payment...",
+  "paymentSucceeded": "Payment succeeded!",
+  "paymentProcessing": "Your payment is processing.",
+  "paymentFailed": "Your payment was not successful, please try again.",
+  "somethingWentWrong": "Something went wrong.",
+  "paymentFailed2": "Payment failed",
+  "unexpectedError": "An unexpected error occurred.",
+  "initializingPayment": "Initializing payment...",
+  "error": "Error",
+  "failedToInitializePayment": "Failed to initialize payment"
 }

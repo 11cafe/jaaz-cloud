@@ -23,7 +23,7 @@ import { defaultPageSize } from "@/utils/consts";
 import { ERechargePaymentState } from "@/consts/types";
 import { handleConsume } from "@/utils/handleConsume";
 import { formatToLocalTime } from "@/utils/datatimeUtils";
-import StripeCheckout from "@/components/StripeCheckout";
+import StripeCheckout from "@/components/billing/StripeCheckout";
 import { useTranslation } from 'react-i18next';
 
 /**
