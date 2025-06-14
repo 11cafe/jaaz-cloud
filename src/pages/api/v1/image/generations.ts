@@ -1,5 +1,7 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { authenticateRequest } from "@/utils/auth";
+import { serverConsume } from "@/utils/serverConsume";
+import { TransactionType } from "@/schema";
 import {
   checkUserBalance,
   createInsufficientBalanceResponse,
@@ -7,6 +9,14 @@ import {
 
 // Allow longer responses for image generation
 export const maxDuration = 120;
+
+// Image generation pricing by model
+const IMAGE_MODEL_PRICING: Record<string, number> = {
+  "google/imagen-4": 0.04,
+  "recraft-ai/recraft-v3": 0.04,
+  "ideogram-ai/ideogram-v2-turbo": 0.05,
+  "black-forest-labs/flux-1.1-pro": 0.04,
+};
 
 export default async function handler(
   req: NextApiRequest,
@@ -61,6 +71,15 @@ export default async function handler(
       });
     }
 
+    // Check if model is supported
+    const modelCost = IMAGE_MODEL_PRICING[model];
+    if (modelCost === undefined) {
+      console.error(`Unsupported model: ${model}`);
+      return res.status(400).json({
+        error: `Unsupported model: ${model}. Supported models: ${Object.keys(IMAGE_MODEL_PRICING).join(", ")}`,
+      });
+    }
+
     // Prepare the Replicate API request
     const replicateUrl = `https://api.replicate.com/v1/models/${model}/predictions`;
 
@@ -109,12 +128,35 @@ export default async function handler(
     // Parse and return the response
     const responseData = await replicateResponse.json();
 
-    // Log successful generation
-    console.log(`Image generation completed for ${username} (${userId}):`, {
-      id: responseData.id,
-      status: responseData.status,
-      timestamp: new Date().toISOString(),
-    });
+    // Check if image generation was successful
+    if (responseData.status === "succeeded" || responseData.output) {
+      // Calculate cost based on model
+      const cost = modelCost;
+
+      // Record consumption for successful image generation
+      const description = `type: image, model: ${model}, prompt: "${prompt.substring(0, 40)}${prompt.length > 40 ? "..." : ""}"`;
+
+      serverConsume({
+        userId,
+        amount: cost,
+        description,
+        transactionType: TransactionType.CONSUME_IMAGE,
+      }).catch((error) => {
+        console.error(
+          `Failed to record image generation consumption for user ${username} (${userId}):`,
+          error,
+        );
+      });
+
+      // Log successful generation with cost
+      console.log(`Image generation completed for ${username} (${userId}):`, {
+        id: responseData.id,
+        status: responseData.status,
+        model: model,
+        cost: cost,
+        timestamp: new Date().toISOString(),
+      });
+    }
 
     // Forward response headers
     replicateResponse.headers.forEach((value, key) => {
