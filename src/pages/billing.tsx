@@ -25,29 +25,54 @@ import { handleConsume } from "@/utils/handleConsume";
 import { formatToLocalTime } from "@/utils/datatimeUtils";
 import StripeCheckout from "@/components/StripeCheckout";
 
+/**
+ * 计费页面组件 - Stripe支付流程的主入口
+ *
+ * 支付流程概述：
+ * 1. 用户选择充值金额
+ * 2. 选择支付方式（嵌入式支付 或 重定向到Stripe）
+ * 3. 创建支付意图或结账会话
+ * 4. 处理支付确认
+ * 5. 更新用户余额和交易记录
+ */
 export default function Billing() {
   const { toast } = useToast();
   const isFirstRender = useIsFirstRender();
   const { mutate } = useSWRConfig();
+
+  // 分页状态
   const [pageNumber, setPageNumber] = useState(1);
+  // 充值金额
   const [rechargeAmount, setRechargeAmount] = useState<number | string>(10);
+  // 充值加载状态
   const [rechargeLoading, setRechargeLoading] = useState(false);
+  // 是否显示嵌入式结账组件
   const [showEmbeddedCheckout, setShowEmbeddedCheckout] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'redirect' | 'embedded'>('embedded');
+
+  // 支付方式配置：embedded（嵌入式）或 redirect（重定向）
+  // 开发者可以手动修改此变量来选择支付方式：
+  // - 'embedded': 嵌入式支付，用户在当前页面完成支付
+  // - 'redirect': 重定向支付，跳转到Stripe托管页面完成支付
+  const paymentMethod: 'redirect' | 'embedded' = 'embedded';
+
+  // 充值结果检查次数计数器
   const rechargeResultCheckTime = useRef(0);
   const isDev = process.env.NODE_ENV === "development";
 
+  // SWR数据获取器，处理401未授权状态
   const swrFetcherNeedSignIn = (url: string) =>
     fetch(url).then((res) => {
       if (res.status === 401) {
-        signIn();
+        signIn(); // 未授权时触发登录
       }
       return res.json();
     });
 
+  // 获取用户余额数据
   const { data: { balance = "" } = {}, isValidating: isBalanceValidating } =
     useSWR("/api/billing/getBalance", swrFetcherNeedSignIn);
 
+  // 获取交易记录数据
   const {
     data: { data: transactions = [] } = {},
     isValidating: isTransactionValidating,
@@ -56,6 +81,7 @@ export default function Billing() {
     swrFetcherNeedSignIn,
   );
 
+  // 处理充值金额变化
   const onAmountChange = (val: number) => {
     if (val === 0) {
       setRechargeAmount("");
@@ -64,14 +90,22 @@ export default function Billing() {
     }
   };
 
+  /**
+   * 步骤1：处理充值请求
+   * 根据选择的支付方式执行不同的流程
+   */
   const handleRecharge = async () => {
+    // 嵌入式支付流程
     if (paymentMethod === 'embedded') {
+      // 显示嵌入式结账组件，该组件会调用createPaymentIntent API
       setShowEmbeddedCheckout(true);
       return;
     }
 
-    // Original redirect-based checkout
+    // 重定向支付流程
     setRechargeLoading(true);
+
+    // 步骤1a：创建Stripe结账会话（重定向模式）
     const response = await fetch("/api/billing/createCheckoutSession", {
       method: "POST",
       headers: {
@@ -83,7 +117,7 @@ export default function Billing() {
     }).then((res) => res.json());
 
     if (response.success && response.url) {
-      // Redirect to Stripe checkout
+      // 步骤1b：重定向到Stripe托管的结账页面
       window.location.href = response.url;
     } else {
       toast({
@@ -95,8 +129,13 @@ export default function Billing() {
     setRechargeLoading(false);
   };
 
+  /**
+   * 步骤5：处理支付成功回调（嵌入式支付）
+   * 当StripeCheckout组件确认支付成功后调用
+   */
   const handlePaymentSuccess = () => {
     setShowEmbeddedCheckout(false);
+    // 刷新余额和交易记录数据
     mutate("/api/billing/getBalance");
     mutate(
       `/api/billing/listTransactions?pageSize=${defaultPageSize}&pageNumber=1`,
@@ -108,15 +147,25 @@ export default function Billing() {
     });
   };
 
+  /**
+   * 处理支付取消
+   */
   const handlePaymentCancel = () => {
     setShowEmbeddedCheckout(false);
   };
 
+  /**
+   * 步骤5：检查充值结果（重定向支付）
+   * 用于重定向支付模式下验证支付是否成功处理
+   * @param sessionId Stripe会话ID
+   */
   const checkRechargeResult = async (sessionId: string) => {
     const response = await fetch(
       `/api/billing/listTransactions?pageSize=1&pageNumber=1&stripeSessionID=${sessionId}`,
     ).then((res) => res.json());
+
     if (response.data.length) {
+      // 找到对应的交易记录，说明支付已处理
       mutate("/api/billing/getBalance");
       mutate(
         `/api/billing/listTransactions?pageSize=${defaultPageSize}&pageNumber=1`,
@@ -126,7 +175,8 @@ export default function Billing() {
         variant: "success",
       });
     } else if (rechargeResultCheckTime.current < 5) {
-      // Sometimes when recharge is successful, the deposit is slow, resulting in failure to effectively update the balance.
+      // 有时充值成功后，入账较慢，导致无法有效更新余额
+      // 最多重试5次，每次间隔1秒
       setTimeout(() => {
         checkRechargeResult(sessionId);
       }, 1000);
@@ -134,6 +184,10 @@ export default function Billing() {
     }
   };
 
+  /**
+   * 处理URL参数中的支付状态（重定向支付返回）
+   * 当用户从Stripe重定向回来时，URL会包含支付状态参数
+   */
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const paymentState = urlParams.get("paymentState");
@@ -142,10 +196,11 @@ export default function Billing() {
     if (paymentState) {
       switch (paymentState) {
         case ERechargePaymentState.SUCCESS:
-          // For redirect payments, we still need to check the result
+          // 支付成功，检查充值结果
           sessionId && checkRechargeResult(sessionId);
           break;
         case ERechargePaymentState.CANCEL:
+          // 支付取消
           toast({
             title: "Recharge canceled",
             variant: "info",
@@ -153,6 +208,7 @@ export default function Billing() {
           break;
       }
 
+      // 清理URL参数
       setTimeout(() => {
         window.history.replaceState(null, "", window.location.pathname);
       }, 1000);
@@ -161,7 +217,7 @@ export default function Billing() {
 
   const inputError = typeof rechargeAmount === "number" && rechargeAmount < 1;
 
-  // to avoid react-hydration-error and make this page client render component
+  // 避免React水合错误，使此页面成为客户端渲染组件
   if (isFirstRender) {
     return null;
   }
@@ -169,7 +225,7 @@ export default function Billing() {
   return (
     <div className="p-8 w-full">
       <div className="flex flex-col gap-8">
-        {/* Balance and Add Funds Card */}
+        {/* 余额和充值卡片 */}
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
@@ -189,35 +245,8 @@ export default function Billing() {
 
               {!showEmbeddedCheckout ? (
                 <>
-                  {/* Payment Method Selection */}
-                  <div className="mb-4">
-                    <label className="text-sm font-medium mb-2 block">Payment Method</label>
-                    <div className="flex gap-2">
-                      <Button
-                        variant={paymentMethod === 'embedded' ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setPaymentMethod('embedded')}
-                      >
-                        Embedded Payment
-                      </Button>
-                      <Button
-                        variant={paymentMethod === 'redirect' ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setPaymentMethod('redirect')}
-                      >
-                        Redirect to Stripe
-                      </Button>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {paymentMethod === 'embedded'
-                        ? 'Complete payment directly on this page'
-                        : 'Redirect to Stripe\'s secure checkout page'
-                      }
-                    </p>
-                  </div>
-
                   <div className="flex flex-wrap items-start gap-4 mb-4">
-                    {/* Quick Amount Buttons */}
+                    {/* 快速金额按钮 */}
                     <div className="flex gap-2">
                       {[5, 10, 15, 20].map((val) => (
                         <Button
@@ -231,7 +260,7 @@ export default function Billing() {
                       ))}
                     </div>
 
-                    {/* Custom Amount Input */}
+                    {/* 自定义金额输入 */}
                     <div className="flex flex-col">
                       <Input
                         type="number"
@@ -263,6 +292,7 @@ export default function Billing() {
                 </>
               ) : (
                 <div className="space-y-4">
+                  {/* 步骤2-4：嵌入式Stripe结账组件 */}
                   <StripeCheckout
                     amount={Number(rechargeAmount)}
                     onSuccess={handlePaymentSuccess}
@@ -274,7 +304,7 @@ export default function Billing() {
           </CardContent>
         </Card>
 
-        {/* Transactions Card */}
+        {/* 交易记录卡片 */}
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
@@ -323,7 +353,7 @@ export default function Billing() {
               />
             </div>
 
-            {/* Mock consume button - commented out */}
+            {/* 模拟消费按钮 - 仅开发环境 */}
             {isDev && (
               <Button
                 disabled={!rechargeAmount || inputError}
