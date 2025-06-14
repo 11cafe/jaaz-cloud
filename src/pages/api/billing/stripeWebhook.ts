@@ -51,33 +51,33 @@ export default async function handler(
   switch (event.type) {
     case "checkout.session.completed":
       /**
-       * Handle transaction completion events
+       * Handle Checkout Session completion events (existing functionality)
        * 1. Check for event duplication;
        * 2. Update the corresponding user's balance in the transaction and insert a new transaction record;
        */
-      const paymentIntent = event.data.object;
-      const userId = paymentIntent.metadata.userId;
+      const checkoutSession = event.data.object;
+      const checkoutUserId = checkoutSession.metadata.userId;
       const sessionIdDuplicateCheck = await drizzleDb
         .select()
         .from(TransactionsSchema)
         .where(
           and(
-            eq(TransactionsSchema.author_id, userId),
-            eq(TransactionsSchema.stripe_session_id, paymentIntent.id),
+            eq(TransactionsSchema.author_id, checkoutUserId),
+            eq(TransactionsSchema.stripe_session_id, checkoutSession.id),
           ),
         )
         .limit(1);
       if (sessionIdDuplicateCheck.length) {
         console.log(
-          "Stripe Webhook: The recharge success event corresponding to this id has been processed",
+          "Stripe Webhook: The recharge success event corresponding to this checkout session has been processed",
         );
         return;
       }
 
       await drizzleDb.transaction(async (trx) => {
-        const amount = paymentIntent.amount_total / 100; // Amount in cents,
+        const amount = checkoutSession.amount_total / 100; // Amount in cents,
         const accountResList = await trx.execute(
-          sql`SELECT balance FROM ${AccountSchema} WHERE id = ${userId} FOR UPDATE`,
+          sql`SELECT balance FROM ${AccountSchema} WHERE id = ${checkoutUserId} FOR UPDATE`,
         );
 
         const currentBalance = Number(accountResList[0]?.balance ?? 0);
@@ -90,17 +90,89 @@ export default async function handler(
             .set({
               balance: sql`${newBalance}`,
             })
-            .where(eq(AccountSchema.id, userId));
+            .where(eq(AccountSchema.id, checkoutUserId));
         } else {
           await trx.insert(AccountSchema).values({
-            id: userId,
+            id: checkoutUserId,
             balance: sql`${newBalance}`,
           });
         }
 
         await trx.insert(TransactionsSchema).values({
           id: nanoid(),
-          author_id: userId,
+          author_id: checkoutUserId,
+          amount: sql`${amount}`,
+          stripe_session_id: checkoutSession.id,
+          previous_balance: sql`${currentBalance}`,
+          after_balance: sql`${newBalance}`,
+          description: TransactionType.RECHARGE,
+          transaction_type: TransactionType.RECHARGE,
+          created_at: new Date().toISOString(),
+        });
+      });
+      break;
+
+    case "payment_intent.succeeded":
+      /**
+       * Handle PaymentIntent success events (for embedded payments)
+       * 1. Check for event duplication;
+       * 2. Update the corresponding user's balance in the transaction and insert a new transaction record;
+       */
+      const paymentIntent = event.data.object;
+      const paymentUserId = paymentIntent.metadata.userId;
+
+      // Skip if not a recharge payment
+      if (paymentIntent.metadata.type !== "recharge") {
+        console.log(
+          "Stripe Webhook: PaymentIntent is not a recharge, skipping",
+        );
+        return;
+      }
+
+      const paymentIdDuplicateCheck = await drizzleDb
+        .select()
+        .from(TransactionsSchema)
+        .where(
+          and(
+            eq(TransactionsSchema.author_id, paymentUserId),
+            eq(TransactionsSchema.stripe_session_id, paymentIntent.id),
+          ),
+        )
+        .limit(1);
+      if (paymentIdDuplicateCheck.length) {
+        console.log(
+          "Stripe Webhook: The recharge success event corresponding to this payment intent has been processed",
+        );
+        return;
+      }
+
+      await drizzleDb.transaction(async (trx) => {
+        const amount = paymentIntent.amount / 100; // Amount in cents
+        const accountResList = await trx.execute(
+          sql`SELECT balance FROM ${AccountSchema} WHERE id = ${paymentUserId} FOR UPDATE`,
+        );
+
+        const currentBalance = Number(accountResList[0]?.balance ?? 0);
+        let newBalance;
+        newBalance = addWithPrecision(currentBalance, amount);
+
+        if (accountResList.length) {
+          await trx
+            .update(AccountSchema)
+            .set({
+              balance: sql`${newBalance}`,
+            })
+            .where(eq(AccountSchema.id, paymentUserId));
+        } else {
+          await trx.insert(AccountSchema).values({
+            id: paymentUserId,
+            balance: sql`${newBalance}`,
+          });
+        }
+
+        await trx.insert(TransactionsSchema).values({
+          id: nanoid(),
+          author_id: paymentUserId,
           amount: sql`${amount}`,
           stripe_session_id: paymentIntent.id,
           previous_balance: sql`${currentBalance}`,
@@ -111,6 +183,7 @@ export default async function handler(
         });
       });
       break;
+
     default:
       // Unexpected event type
       console.log(`Unhandled event type ${event.type}.`);

@@ -23,6 +23,7 @@ import { defaultPageSize } from "@/utils/consts";
 import { ERechargePaymentState } from "@/consts/types";
 import { handleConsume } from "@/utils/handleConsume";
 import { formatToLocalTime } from "@/utils/datatimeUtils";
+import StripeCheckout from "@/components/StripeCheckout";
 
 export default function Billing() {
   const { toast } = useToast();
@@ -31,6 +32,8 @@ export default function Billing() {
   const [pageNumber, setPageNumber] = useState(1);
   const [rechargeAmount, setRechargeAmount] = useState<number | string>(10);
   const [rechargeLoading, setRechargeLoading] = useState(false);
+  const [showEmbeddedCheckout, setShowEmbeddedCheckout] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<'redirect' | 'embedded'>('embedded');
   const rechargeResultCheckTime = useRef(0);
   const isDev = process.env.NODE_ENV === "development";
 
@@ -62,6 +65,12 @@ export default function Billing() {
   };
 
   const handleRecharge = async () => {
+    if (paymentMethod === 'embedded') {
+      setShowEmbeddedCheckout(true);
+      return;
+    }
+
+    // Original redirect-based checkout
     setRechargeLoading(true);
     const response = await fetch("/api/billing/createCheckoutSession", {
       method: "POST",
@@ -74,22 +83,8 @@ export default function Billing() {
     }).then((res) => res.json());
 
     if (response.success && response.url) {
-      // Check if it's dev mode (simulated recharge)
-      if (response.devMode) {
-        // In dev mode, directly refresh balance and show success
-        mutate("/api/billing/getBalance");
-        mutate(
-          `/api/billing/listTransactions?pageSize=${defaultPageSize}&pageNumber=1`,
-        );
-        toast({
-          title: "Recharge successful (Dev Mode)",
-          description: response.message || "Development mode recharge completed",
-          variant: "success",
-        });
-      } else {
-        // Production mode: redirect to Stripe
-        window.location.href = response.url;
-      }
+      // Redirect to Stripe checkout
+      window.location.href = response.url;
     } else {
       toast({
         title: "Recharge failure",
@@ -98,6 +93,23 @@ export default function Billing() {
       });
     }
     setRechargeLoading(false);
+  };
+
+  const handlePaymentSuccess = () => {
+    setShowEmbeddedCheckout(false);
+    mutate("/api/billing/getBalance");
+    mutate(
+      `/api/billing/listTransactions?pageSize=${defaultPageSize}&pageNumber=1`,
+    );
+    toast({
+      title: "Payment successful",
+      description: "Your account has been recharged successfully!",
+      variant: "success",
+    });
+  };
+
+  const handlePaymentCancel = () => {
+    setShowEmbeddedCheckout(false);
   };
 
   const checkRechargeResult = async (sessionId: string) => {
@@ -130,6 +142,7 @@ export default function Billing() {
     if (paymentState) {
       switch (paymentState) {
         case ERechargePaymentState.SUCCESS:
+          // For redirect payments, we still need to check the result
           sessionId && checkRechargeResult(sessionId);
           break;
         case ERechargePaymentState.CANCEL:
@@ -144,7 +157,7 @@ export default function Billing() {
         window.history.replaceState(null, "", window.location.pathname);
       }, 1000);
     }
-  }, []);
+  }, [toast]);
 
   const inputError = typeof rechargeAmount === "number" && rechargeAmount < 1;
 
@@ -172,57 +185,91 @@ export default function Billing() {
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <h3 className="text-lg font-medium">Add Funds</h3>
-                {isDev && (
-                  <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
-                    Dev Mode
-                  </span>
-                )}
               </div>
 
-              <div className="flex flex-wrap items-start gap-4 mb-4">
-                {/* Quick Amount Buttons */}
-                <div className="flex gap-2">
-                  {[5, 10, 15, 20].map((val) => (
-                    <Button
-                      key={val}
-                      variant={rechargeAmount === val ? "default" : "outline"}
-                      size="lg"
-                      onClick={() => setRechargeAmount(val)}
-                    >
-                      ${val}
-                    </Button>
-                  ))}
-                </div>
+              {!showEmbeddedCheckout ? (
+                <>
+                  {/* Payment Method Selection */}
+                  <div className="mb-4">
+                    <label className="text-sm font-medium mb-2 block">Payment Method</label>
+                    <div className="flex gap-2">
+                      <Button
+                        variant={paymentMethod === 'embedded' ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setPaymentMethod('embedded')}
+                      >
+                        Embedded Payment
+                      </Button>
+                      <Button
+                        variant={paymentMethod === 'redirect' ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setPaymentMethod('redirect')}
+                      >
+                        Redirect to Stripe
+                      </Button>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {paymentMethod === 'embedded'
+                        ? 'Complete payment directly on this page'
+                        : 'Redirect to Stripe\'s secure checkout page'
+                      }
+                    </p>
+                  </div>
 
-                {/* Custom Amount Input */}
-                <div className="flex flex-col">
-                  <Input
-                    type="number"
-                    step={1}
-                    value={rechargeAmount}
-                    min={5}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                      onAmountChange(Number(e.target.value))
-                    }
-                    className="w-56"
-                    placeholder="Enter amount ($)"
+                  <div className="flex flex-wrap items-start gap-4 mb-4">
+                    {/* Quick Amount Buttons */}
+                    <div className="flex gap-2">
+                      {[5, 10, 15, 20].map((val) => (
+                        <Button
+                          key={val}
+                          variant={rechargeAmount === val ? "default" : "outline"}
+                          size="lg"
+                          onClick={() => setRechargeAmount(val)}
+                        >
+                          ${val}
+                        </Button>
+                      ))}
+                    </div>
+
+                    {/* Custom Amount Input */}
+                    <div className="flex flex-col">
+                      <Input
+                        type="number"
+                        step={1}
+                        value={rechargeAmount}
+                        min={5}
+                        onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                          onAmountChange(Number(e.target.value))
+                        }
+                        className="w-56"
+                        placeholder="Enter amount ($)"
+                      />
+                      {inputError && (
+                        <span className="text-sm text-red-500 mt-1">
+                          Minimum top-up: $5
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <Button
+                    disabled={!rechargeAmount || inputError || rechargeLoading}
+                    size="lg"
+                    onClick={handleRecharge}
+                    isLoading={rechargeLoading}
+                  >
+                    {rechargeLoading ? "Processing..." : "Confirm Top-up"}
+                  </Button>
+                </>
+              ) : (
+                <div className="space-y-4">
+                  <StripeCheckout
+                    amount={Number(rechargeAmount)}
+                    onSuccess={handlePaymentSuccess}
+                    onCancel={handlePaymentCancel}
                   />
-                  {inputError && (
-                    <span className="text-sm text-red-500 mt-1">
-                      Minimum top-up: $5
-                    </span>
-                  )}
                 </div>
-              </div>
-
-              <Button
-                disabled={!rechargeAmount || inputError || rechargeLoading}
-                size="lg"
-                onClick={handleRecharge}
-                isLoading={rechargeLoading}
-              >
-                {rechargeLoading ? "Processing..." : "Confirm Top-up"}
-              </Button>
+              )}
             </div>
           </CardContent>
         </Card>
