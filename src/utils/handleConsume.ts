@@ -1,8 +1,6 @@
 import { TransactionType } from "@/schema";
 import { UPDATE_BALANCE_CUSTOM_EVENT } from "./consts";
-
-const isTwoDecimalPlaces = (num: number) =>
-  Number.isFinite(num) && Math.floor(num * 100) === num * 100;
+import { validateAmount } from "./mathUtils";
 
 /**
  * A unified consumption function is used to update the balance data in the head navigation bar after successful consumption.
@@ -12,7 +10,8 @@ export const handleConsume = async (
   transactionType: TransactionType,
   description?: string,
 ): Promise<{ success: boolean; error?: string }> => {
-  if (isTwoDecimalPlaces(amount)) {
+  const validation = validateAmount(amount);
+  if (validation.valid) {
     const res = await fetch("/api/billing/consume", {
       method: "POST",
       headers: {
@@ -33,8 +32,7 @@ export const handleConsume = async (
   } else {
     return {
       success: false,
-      error:
-        "The input number must be a number with at most two decimal places.",
+      error: validation.error || "Invalid amount.",
     };
   }
 };

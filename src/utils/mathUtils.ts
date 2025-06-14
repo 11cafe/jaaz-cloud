@@ -1,25 +1,38 @@
 /**
- * Adds two numbers with precision handling.
- * @param a - The first number.
- * @param b - The second number.
- * @param factor - The precision factor (e.g., 100 for two decimal places).
- * @returns The sum of a and b with specified decimal precision.
+ * 精确加法运算，避免浮点数精度问题
  */
-export const addWithPrecision = (
-  a: number,
-  b: number,
-  factor: number = 100,
-): number => (Math.round(a * factor) + Math.round(b * factor)) / factor;
+export function addWithPrecision(a: number, b: number): number {
+  const factor = Math.pow(10, 8); // 保留8位小数
+  return Math.round((a + b) * factor) / factor;
+}
 
 /**
- * Subtracts one number from another with precision handling.
- * @param a - The first number.
- * @param b - The second number.
- * @param factor - The precision factor (e.g., 100 for two decimal places).
- * @returns The result of a - b with specified decimal precision.
+ * 精确减法运算，避免浮点数精度问题
  */
-export const subtractWithPrecision = (
-  a: number,
-  b: number,
-  factor: number = 100,
-): number => (Math.round(a * factor) - Math.round(b * factor)) / factor;
+export function subtractWithPrecision(a: number, b: number): number {
+  const factor = Math.pow(10, 8); // 保留8位小数
+  return Math.round((a - b) * factor) / factor;
+}
+
+/**
+ * 检查金额是否有效（大于0且最多8位小数）
+ */
+export function validateAmount(amount: number): {
+  valid: boolean;
+  error?: string;
+} {
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { valid: false, error: "Amount must be a positive number." };
+  }
+
+  // 检查是否最多8位小数
+  const factor = Math.pow(10, 8);
+  if (Math.floor(amount * factor) !== amount * factor) {
+    return {
+      valid: false,
+      error: "Amount must have at most 8 decimal places.",
+    };
+  }
+
+  return { valid: true };
+}

@@ -13,6 +13,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { drizzleDb } from "@/server/db-adapters/PostgresAdapter";
 import { DeviceAuthRequestSchema, UserSchema } from "@/schema";
 import { eq } from "drizzle-orm";
+import { isExpired } from "@/utils/datatimeUtils";
 
 export default async function handler(
   req: NextApiRequest,
@@ -37,7 +38,7 @@ export default async function handler(
     return res.status(404).json({ error: "Code not found" });
   }
 
-  if (record.expires_at < Date.now()) {
+  if (isExpired(record.expires_at)) {
     return res.status(410).json({ status: "expired" });
   }
 
