@@ -13,7 +13,9 @@ import {
 
 export enum TransactionType {
   RECHARGE = "RECHARGE",
-  CONSUME = "CONSUME",
+  CONSUME_TEXT = "CONSUME_TEXT",
+  CONSUME_IMAGE = "CONSUME_IMAGE",
+  CONSUME_OTHER = "CONSUME_OTHER",
 }
 
 export const UserSchema = pgTable(
@@ -66,7 +68,7 @@ export const AccountSchema = pgTable("account", {
     .primaryKey()
     .references(() => UserSchema.id)
     .notNull(),
-  balance: decimal("balance", { precision: 10, scale: 2 }).notNull(),
+  balance: decimal("balance", { precision: 18, scale: 8 }).notNull(),
   updated_at: timestamp("updated_at", {
     precision: 3,
     mode: "string",
@@ -83,7 +85,7 @@ export const TransactionsSchema = pgTable(
   {
     id: text("id").primaryKey().notNull(),
     author_id: integer("author_id").references(() => UserSchema.id),
-    amount: decimal("amount", { precision: 100, scale: 2 }).notNull(),
+    amount: decimal("amount", { precision: 100, scale: 8 }).notNull(),
     stripe_session_id: text("stripe_session_id"),
     transaction_type: text("transaction_type")
       .$type<TransactionType>()
@@ -96,11 +98,11 @@ export const TransactionsSchema = pgTable(
       .notNull(),
     previous_balance: decimal("previous_balance", {
       precision: 100,
-      scale: 2,
+      scale: 8,
     }).notNull(),
     after_balance: decimal("after_balance", {
       precision: 100,
-      scale: 2,
+      scale: 8,
     }).notNull(),
     description: text("description"),
   },

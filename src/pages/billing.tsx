@@ -282,7 +282,7 @@ export default function Billing() {
                 disabled={!rechargeAmount || inputError}
                 size="lg"
                 onClick={() => {
-                  handleConsume(1, TransactionType.CONSUME, "consume-1");
+                  handleConsume(1, TransactionType.CONSUME_TEXT, "consume-1");
                 }}
               >
                 mock consume

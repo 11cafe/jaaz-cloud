@@ -73,8 +73,8 @@ export default async function handler(
           amount: sql`${amount}`,
           previous_balance: sql`${currentBalance}`,
           after_balance: sql`${newBalance}`,
-          description: description ?? TransactionType.CONSUME,
-          transaction_type: TransactionType.CONSUME,
+          description: description ?? TransactionType.CONSUME_OTHER,
+          transaction_type: TransactionType.CONSUME_OTHER,
           created_at: new Date().toISOString(),
         });
 

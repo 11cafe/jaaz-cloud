@@ -1,5 +1,7 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { authenticateRequest } from "@/utils/auth";
+import { serverConsume } from "@/utils/serverConsume";
+import { TransactionType } from "@/schema";
 
 // Allow streaming responses up to 90 seconds
 export const maxDuration = 90;
@@ -133,6 +135,23 @@ export default async function handler(
                             ?.reasoning_tokens || 0,
                         timestamp: new Date().toISOString(),
                       });
+
+                      // Record consumption based on cost
+                      if (parsed.usage.cost && parsed.usage.cost > 0) {
+                        const description = `type: text, model: ${modifiedBody.model}, total_tokens: ${parsed.usage.total_tokens}`;
+
+                        serverConsume({
+                          userId,
+                          amount: parsed.usage.cost,
+                          description,
+                          transactionType: TransactionType.CONSUME_TEXT,
+                        }).catch((error) => {
+                          console.error(
+                            `Failed to record consumption for user ${username} (${userId}):`,
+                            error,
+                          );
+                        });
+                      }
                     }
                   }
                 }
@@ -166,6 +185,23 @@ export default async function handler(
             responseData.usage.completion_tokens_details?.reasoning_tokens || 0,
           timestamp: new Date().toISOString(),
         });
+
+        // Record consumption based on cost
+        if (responseData.usage.cost && responseData.usage.cost > 0) {
+          const description = `type: text, model: ${modifiedBody.model}, total_tokens: ${responseData.usage.total_tokens}`;
+
+          serverConsume({
+            userId,
+            amount: responseData.usage.cost,
+            description,
+            transactionType: TransactionType.CONSUME_TEXT,
+          }).catch((error) => {
+            console.error(
+              `Failed to record consumption for user ${username} (${userId}):`,
+              error,
+            );
+          });
+        }
       }
 
       // Forward response headers
