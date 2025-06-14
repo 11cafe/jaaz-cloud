@@ -1,5 +1,5 @@
 {
-  "id": "600f8a29-abac-48b5-91e5-adb19c337d04",
+  "id": "4e6f340a-dd15-4fcb-a8b6-282c8c702b3d",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -16,12 +16,19 @@
         },
         "balance": {
           "name": "balance",
-          "type": "numeric(10, 2)",
+          "type": "numeric(18, 8)",
           "primaryKey": false,
           "notNull": true
         },
         "updated_at": {
           "name": "updated_at",
+          "type": "timestamp(3)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_at": {
+          "name": "created_at",
           "type": "timestamp(3)",
           "primaryKey": false,
           "notNull": true,
@@ -112,7 +119,7 @@
         },
         "amount": {
           "name": "amount",
-          "type": "numeric(100, 2)",
+          "type": "numeric(100, 8)",
           "primaryKey": false,
           "notNull": true
         },
@@ -137,13 +144,13 @@
         },
         "previous_balance": {
           "name": "previous_balance",
-          "type": "numeric(100, 2)",
+          "type": "numeric(100, 8)",
           "primaryKey": false,
           "notNull": true
         },
         "after_balance": {
           "name": "after_balance",
-          "type": "numeric(100, 2)",
+          "type": "numeric(100, 8)",
           "primaryKey": false,
           "notNull": true
         },

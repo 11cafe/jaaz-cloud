@@ -1,7 +1,8 @@
 CREATE TABLE IF NOT EXISTS "account" (
 	"id" integer PRIMARY KEY NOT NULL,
-	"balance" numeric(10, 2) NOT NULL,
-	"updated_at" timestamp(3) DEFAULT now() NOT NULL
+	"balance" numeric(18, 8) NOT NULL,
+	"updated_at" timestamp(3) DEFAULT now() NOT NULL,
+	"created_at" timestamp(3) DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "device_auth_requests" (
@@ -16,12 +17,12 @@ CREATE TABLE IF NOT EXISTS "device_auth_requests" (
 CREATE TABLE IF NOT EXISTS "transactions" (
 	"id" text PRIMARY KEY NOT NULL,
 	"author_id" integer,
-	"amount" numeric(100, 2) NOT NULL,
+	"amount" numeric(100, 8) NOT NULL,
 	"stripe_session_id" text,
 	"transaction_type" text NOT NULL,
 	"created_at" timestamp(3) DEFAULT now() NOT NULL,
-	"previous_balance" numeric(100, 2) NOT NULL,
-	"after_balance" numeric(100, 2) NOT NULL,
+	"previous_balance" numeric(100, 8) NOT NULL,
+	"after_balance" numeric(100, 8) NOT NULL,
 	"description" text
 );
 --> statement-breakpoint
