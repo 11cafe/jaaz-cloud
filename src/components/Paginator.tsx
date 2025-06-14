@@ -1,5 +1,5 @@
 import React from "react";
-import { Flex, Button, Text } from "@chakra-ui/react";
+import { Button } from "@/components/ui/button";
 
 type PaginatorProps = {
   pageNumber: number;
@@ -27,24 +27,28 @@ const Paginator: React.FC<PaginatorProps> = ({
   };
 
   return (
-    <Flex justifyContent="center" alignItems="center" mt={2}>
+    <div className="flex justify-center items-center mt-2">
       <Button
         onClick={handlePrevPage}
-        isDisabled={pageNumber === 1 || loading}
-        mr={2}
+        disabled={pageNumber === 1 || loading}
+        variant="outline"
+        className="mr-2"
       >
         Previous
       </Button>
-      <Text>{pageNumber}</Text>
+      <span className="mx-4 text-sm font-medium">{pageNumber}</span>
       <Button
         onClick={handleNextPage}
-        isDisabled={noMoreData || loading}
-        ml={2}
+        disabled={noMoreData || loading}
+        variant="outline"
+        className="ml-2"
       >
         Next
       </Button>
-      {noMoreData && !loading && <Text ml={4}>No more data!</Text>}
-    </Flex>
+      {noMoreData && !loading && (
+        <span className="ml-4 text-sm text-muted-foreground">No more data!</span>
+      )}
+    </div>
   );
 };
 

@@ -4,6 +4,7 @@ import Head from "next/head";
 import { SessionProvider } from "next-auth/react";
 import { SWRConfig } from "swr";
 import { swrLocalStorageProvider } from "@/utils/swrutils";
+import { Toaster } from "@/components/ui/toaster";
 import "@/global.css";
 
 export default function App({
@@ -29,6 +30,7 @@ export default function App({
               <Component {...pageProps} />
             </Layout>
           )}
+          <Toaster />
         </SessionProvider>
       </SWRConfig>
     </>

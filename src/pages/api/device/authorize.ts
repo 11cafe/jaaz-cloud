@@ -15,6 +15,7 @@ import { drizzleDb } from "@/server/db-adapters/PostgresAdapter";
 import { DeviceAuthRequestSchema, UserSchema } from "@/schema";
 import { eq } from "drizzle-orm";
 import jwt from "jsonwebtoken";
+import { isExpired } from "@/utils/datatimeUtils";
 
 const JWT_SECRET = process.env.NEXTAUTH_SECRET || "dev-secret";
 
@@ -43,10 +44,8 @@ export default async function handler(
     return res.status(400).json({ error: "Code already used or expired" });
   }
 
-  const currentTime = Date.now();
-  const expiresTime = record.expires_at;
-
-  if (expiresTime < currentTime) {
+  // 使用工具函数检查是否过期
+  if (isExpired(record.expires_at)) {
     return res.status(410).json({ error: "Code expired" });
   }
 

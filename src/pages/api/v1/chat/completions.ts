@@ -1,5 +1,11 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { authenticateRequest } from "@/utils/auth";
+import { serverConsume } from "@/utils/serverConsume";
+import { TransactionType } from "@/schema";
+import {
+  checkUserBalance,
+  createInsufficientBalanceResponse,
+} from "@/utils/balanceCheck";
 
 // Allow streaming responses up to 90 seconds
 export const maxDuration = 90;
@@ -20,6 +26,21 @@ export default async function handler(
   }
 
   const { userId, username } = authResult;
+
+  // Check user balance before proceeding
+  const balanceCheck = await checkUserBalance(userId);
+  if (balanceCheck.error) {
+    return res.status(500).json({ error: balanceCheck.error });
+  }
+
+  if (!balanceCheck.hasBalance) {
+    console.log(
+      `Chat request blocked for user: ${username} (ID: ${userId}) - Insufficient balance: $${balanceCheck.balance}`,
+    );
+    return res
+      .status(402)
+      .json(createInsufficientBalanceResponse(balanceCheck.balance));
+  }
 
   // Get OpenRouter API key from environment variables
   const openrouterApiKey = process.env.OPENROUTER_API_KEY;
@@ -133,6 +154,23 @@ export default async function handler(
                             ?.reasoning_tokens || 0,
                         timestamp: new Date().toISOString(),
                       });
+
+                      // Record consumption based on cost
+                      if (parsed.usage.cost && parsed.usage.cost > 0) {
+                        const description = `type: text, model: ${modifiedBody.model}, total_tokens: ${parsed.usage.total_tokens}`;
+
+                        serverConsume({
+                          userId,
+                          amount: parsed.usage.cost,
+                          description,
+                          transactionType: TransactionType.CONSUME_TEXT,
+                        }).catch((error) => {
+                          console.error(
+                            `Failed to record consumption for user ${username} (${userId}):`,
+                            error,
+                          );
+                        });
+                      }
                     }
                   }
                 }
@@ -166,6 +204,23 @@ export default async function handler(
             responseData.usage.completion_tokens_details?.reasoning_tokens || 0,
           timestamp: new Date().toISOString(),
         });
+
+        // Record consumption based on cost
+        if (responseData.usage.cost && responseData.usage.cost > 0) {
+          const description = `type: text, model: ${modifiedBody.model}, total_tokens: ${responseData.usage.total_tokens}`;
+
+          serverConsume({
+            userId,
+            amount: responseData.usage.cost,
+            description,
+            transactionType: TransactionType.CONSUME_TEXT,
+          }).catch((error) => {
+            console.error(
+              `Failed to record consumption for user ${username} (${userId}):`,
+              error,
+            );
+          });
+        }
       }
 
       // Forward response headers

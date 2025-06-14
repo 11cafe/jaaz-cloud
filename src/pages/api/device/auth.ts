@@ -13,6 +13,11 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { drizzleDb } from "@/server/db-adapters/PostgresAdapter";
 import { DeviceAuthRequestSchema } from "@/schema";
 import { nanoid } from "nanoid";
+import {
+  createExpirationTime,
+  toTimestamp,
+  getCurrentUTCTime,
+} from "@/utils/datatimeUtils";
 
 export default async function handler(
   req: NextApiRequest,
@@ -25,22 +30,18 @@ export default async function handler(
   // 生成唯一 device_code
   const device_code = nanoid(32);
   const expires_in = 600; // 10分钟
-  const now = Date.now();
-  const expires_at = now + expires_in * 1000;
+  const expires_at = createExpirationTime(expires_in);
 
   try {
     const result = await drizzleDb.insert(DeviceAuthRequestSchema).values({
       device_code,
       status: "pending",
       expires_at,
-      created_at: now,
     });
 
     console.log("Creating device code with times:", {
-      current_timestamp: now,
-      current_iso: new Date(now).toISOString(),
-      expires_timestamp: expires_at,
-      expires_iso: new Date(expires_at).toISOString(),
+      current_time_utc: getCurrentUTCTime(),
+      expires_time_utc: expires_at,
       expires_in_seconds: expires_in,
     });
     console.log("Insert result:", result);

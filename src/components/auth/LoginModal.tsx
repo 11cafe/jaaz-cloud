@@ -1,10 +1,9 @@
 import {
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-} from "@chakra-ui/react";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 import LoginFormButtons from "./LoginFormButtons";
 import { useSession } from "next-auth/react";
@@ -20,32 +19,31 @@ function LoginModal({ onClose }: { onClose: () => void }) {
   }, [session]);
 
   return (
-    <>
-      <Modal isOpen={true} onClose={onClose}>
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>Login</ModalHeader>
-          <ModalBody>
-            <LoginFormButtons
-              onClickGoogle={() => {
-                window.open(
-                  "/auth/signinProvider?provider=google",
-                  "Login",
-                  "width=800,height=600",
-                );
-              }}
-              onClickGithub={() => {
-                window.open(
-                  "/auth/signinProvider?provider=github",
-                  "Login",
-                  "width=800,height=600",
-                );
-              }}
-            />
-          </ModalBody>
-        </ModalContent>
-      </Modal>
-    </>
+    <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Login</DialogTitle>
+        </DialogHeader>
+        <div className="py-4">
+          <LoginFormButtons
+            onClickGoogle={() => {
+              window.open(
+                "/auth/signinProvider?provider=google",
+                "Login",
+                "width=800,height=600",
+              );
+            }}
+            onClickGithub={() => {
+              window.open(
+                "/auth/signinProvider?provider=github",
+                "Login",
+                "width=800,height=600",
+              );
+            }}
+          />
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

@@ -1,28 +1,20 @@
-import {
-  Box,
-  Button,
-  ButtonGroup,
-  Heading,
-  HStack,
-  InputGroup,
-  useToast,
-  Flex,
-  InputLeftElement,
-  Input,
-  FormControl,
-  FormErrorMessage,
-  Table,
-  Tbody,
-  Td,
-  Th,
-  Thead,
-  Tr,
-  VStack,
-  Divider,
-  Spinner,
-} from "@chakra-ui/react";
 import { ChangeEvent, useEffect, useState, useRef } from "react";
 import useSWR, { useSWRConfig } from "swr";
+import { signIn } from "next-auth/react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/components/ui/use-toast";
+import Spinner from "@/components/ui/Spinner";
 import Paginator from "@/components/Paginator";
 import { Transaction } from "@/server/dbTypes";
 import { TransactionType } from "@/schema";
@@ -30,27 +22,57 @@ import useIsFirstRender from "@/components/hooks/useIsFirstRender";
 import { defaultPageSize } from "@/utils/consts";
 import { ERechargePaymentState } from "@/consts/types";
 import { handleConsume } from "@/utils/handleConsume";
-import { signIn } from "next-auth/react";
+import { formatToLocalTime } from "@/utils/datatimeUtils";
+import StripeCheckout from "@/components/StripeCheckout";
 
+/**
+ * 计费页面组件 - Stripe支付流程的主入口
+ *
+ * 支付流程概述：
+ * 1. 用户选择充值金额
+ * 2. 选择支付方式（嵌入式支付 或 重定向到Stripe）
+ * 3. 创建支付意图或结账会话
+ * 4. 处理支付确认
+ * 5. 更新用户余额和交易记录
+ */
 export default function Billing() {
-  const toast = useToast();
+  const { toast } = useToast();
   const isFirstRender = useIsFirstRender();
   const { mutate } = useSWRConfig();
+
+  // 分页状态
   const [pageNumber, setPageNumber] = useState(1);
+  // 充值金额
   const [rechargeAmount, setRechargeAmount] = useState<number | string>(10);
+  // 充值加载状态
   const [rechargeLoading, setRechargeLoading] = useState(false);
+  // 是否显示嵌入式结账组件
+  const [showEmbeddedCheckout, setShowEmbeddedCheckout] = useState(false);
+
+  // 支付方式配置：embedded（嵌入式）或 redirect（重定向）
+  // 开发者可以手动修改此变量来选择支付方式：
+  // - 'embedded': 嵌入式支付，用户在当前页面完成支付
+  // - 'redirect': 重定向支付，跳转到Stripe托管页面完成支付
+  const paymentMethod: 'redirect' | 'embedded' = 'embedded';
+
+  // 充值结果检查次数计数器
   const rechargeResultCheckTime = useRef(0);
+  const isDev = process.env.NODE_ENV === "development";
+
+  // SWR数据获取器，处理401未授权状态
   const swrFetcherNeedSignIn = (url: string) =>
     fetch(url).then((res) => {
       if (res.status === 401) {
-        signIn();
+        signIn(); // 未授权时触发登录
       }
       return res.json();
     });
 
+  // 获取用户余额数据
   const { data: { balance = "" } = {}, isValidating: isBalanceValidating } =
     useSWR("/api/billing/getBalance", swrFetcherNeedSignIn);
 
+  // 获取交易记录数据
   const {
     data: { data: transactions = [] } = {},
     isValidating: isTransactionValidating,
@@ -59,6 +81,7 @@ export default function Billing() {
     swrFetcherNeedSignIn,
   );
 
+  // 处理充值金额变化
   const onAmountChange = (val: number) => {
     if (val === 0) {
       setRechargeAmount("");
@@ -67,8 +90,22 @@ export default function Billing() {
     }
   };
 
+  /**
+   * 步骤1：处理充值请求
+   * 根据选择的支付方式执行不同的流程
+   */
   const handleRecharge = async () => {
+    // 嵌入式支付流程
+    if (paymentMethod === 'embedded') {
+      // 显示嵌入式结账组件，该组件会调用createPaymentIntent API
+      setShowEmbeddedCheckout(true);
+      return;
+    }
+
+    // 重定向支付流程
     setRechargeLoading(true);
+
+    // 步骤1a：创建Stripe结账会话（重定向模式）
     const response = await fetch("/api/billing/createCheckoutSession", {
       method: "POST",
       headers: {
@@ -80,36 +117,66 @@ export default function Billing() {
     }).then((res) => res.json());
 
     if (response.success && response.url) {
+      // 步骤1b：重定向到Stripe托管的结账页面
       window.location.href = response.url;
     } else {
       toast({
         title: "Recharge failure",
         description: response.error,
-        status: "warning",
-        duration: 10000,
-        isClosable: true,
+        variant: "warning",
       });
     }
     setRechargeLoading(false);
   };
 
+  /**
+   * 步骤5：处理支付成功回调（嵌入式支付）
+   * 当StripeCheckout组件确认支付成功后调用
+   */
+  const handlePaymentSuccess = () => {
+    setShowEmbeddedCheckout(false);
+    // 刷新余额和交易记录数据
+    mutate("/api/billing/getBalance");
+    mutate(
+      `/api/billing/listTransactions?pageSize=${defaultPageSize}&pageNumber=1`,
+    );
+    toast({
+      title: "Payment successful",
+      description: "Your account has been recharged successfully!",
+      variant: "success",
+    });
+  };
+
+  /**
+   * 处理支付取消
+   */
+  const handlePaymentCancel = () => {
+    setShowEmbeddedCheckout(false);
+  };
+
+  /**
+   * 步骤5：检查充值结果（重定向支付）
+   * 用于重定向支付模式下验证支付是否成功处理
+   * @param sessionId Stripe会话ID
+   */
   const checkRechargeResult = async (sessionId: string) => {
     const response = await fetch(
       `/api/billing/listTransactions?pageSize=1&pageNumber=1&stripeSessionID=${sessionId}`,
     ).then((res) => res.json());
+
     if (response.data.length) {
+      // 找到对应的交易记录，说明支付已处理
       mutate("/api/billing/getBalance");
       mutate(
         `/api/billing/listTransactions?pageSize=${defaultPageSize}&pageNumber=1`,
       );
       toast({
         title: "Recharge successful",
-        status: "success",
-        duration: 3000,
-        isClosable: true,
+        variant: "success",
       });
     } else if (rechargeResultCheckTime.current < 5) {
-      // Sometimes when recharge is successful, the deposit is slow, resulting in failure to effectively update the balance.
+      // 有时充值成功后，入账较慢，导致无法有效更新余额
+      // 最多重试5次，每次间隔1秒
       setTimeout(() => {
         checkRechargeResult(sessionId);
       }, 1000);
@@ -117,6 +184,10 @@ export default function Billing() {
     }
   };
 
+  /**
+   * 处理URL参数中的支付状态（重定向支付返回）
+   * 当用户从Stripe重定向回来时，URL会包含支付状态参数
+   */
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const paymentState = urlParams.get("paymentState");
@@ -125,149 +196,178 @@ export default function Billing() {
     if (paymentState) {
       switch (paymentState) {
         case ERechargePaymentState.SUCCESS:
+          // 支付成功，检查充值结果
           sessionId && checkRechargeResult(sessionId);
           break;
         case ERechargePaymentState.CANCEL:
+          // 支付取消
           toast({
             title: "Recharge canceled",
-            status: "info",
-            duration: 3000,
-            isClosable: true,
+            variant: "info",
           });
           break;
       }
 
+      // 清理URL参数
       setTimeout(() => {
         window.history.replaceState(null, "", window.location.pathname);
       }, 1000);
     }
-  }, []);
+  }, [toast]);
 
   const inputError = typeof rechargeAmount === "number" && rechargeAmount < 1;
 
-  // to avoid react-hydration-error and make this page client render component
+  // 避免React水合错误，使此页面成为客户端渲染组件
   if (isFirstRender) {
     return null;
   }
 
   return (
-    <Box p={8} w="100%">
-      <VStack spacing={8}>
-        <Box w="100%" p={8} borderWidth={1} borderRadius="lg" boxShadow="md">
-          <Flex alignItems="center" mb={4}>
-            <Heading size="lg" mb={0}>
-              Balance: ${balance}
-            </Heading>
-            {isBalanceValidating && <Spinner ml={2} size={"xs"} color="gray" />}
-          </Flex>
-          <Divider mb={4} />
-          <Heading size="md" mb={4}>
-            Add Funds
-          </Heading>
-          <HStack spacing={4} mb={4}>
-            <ButtonGroup size="lg" isAttached>
-              {[5, 10, 15, 20].map((val) => (
-                <Button
-                  key={val}
-                  onClick={() => setRechargeAmount(val)}
-                  colorScheme={rechargeAmount === val ? "purple" : "gray"}
-                >
-                  ${val}
-                </Button>
-              ))}
-            </ButtonGroup>
-            <FormControl isInvalid={inputError}>
-              <InputGroup size="lg">
-                <InputLeftElement
-                  pointerEvents="none"
-                  color="gray.300"
-                  fontSize="1.2em"
-                >
-                  $
-                </InputLeftElement>
-                <Input
-                  type="number"
-                  step={1}
-                  value={rechargeAmount}
-                  min={5}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                    onAmountChange(Number(e.target.value))
-                  }
-                  maxW="220px"
-                />
-              </InputGroup>
-              {inputError && (
-                <FormErrorMessage position="absolute">
-                  Minimum top-up: $5
-                </FormErrorMessage>
-              )}
-            </FormControl>
-          </HStack>
-          <Button
-            isDisabled={!rechargeAmount || inputError || rechargeLoading}
-            isLoading={rechargeLoading}
-            colorScheme="purple"
-            size="lg"
-            onClick={handleRecharge}
-          >
-            Confirm Top-up
-          </Button>
-        </Box>
-        <Box w="100%" p={8} borderWidth={1} borderRadius="lg" boxShadow="md">
-          <Heading size="md" mb={4}>
-            Recent Transactions
-            {isTransactionValidating && (
-              <Spinner ml={2} size={"xs"} color="gray" />
-            )}
-          </Heading>
-          <Table variant="simple">
-            <Thead>
-              <Tr>
-                <Th>Time</Th>
-                <Th>Type</Th>
-                <Th>Amount</Th>
-                <Th>Description</Th>
-              </Tr>
-            </Thead>
-            <Tbody>
-              {transactions.length > 0 ? (
-                transactions.map((item: Transaction) => (
-                  <Tr key={item.id}>
-                    <Td>{item.created_at}</Td>
-                    <Td>{item.transaction_type}</Td>
-                    <Td>{item.amount}</Td>
-                    <Td>{item.description ?? "--"}</Td>
-                  </Tr>
-                ))
+    <div className="p-8 w-full">
+      <div className="flex flex-col gap-8">
+        {/* 余额和充值卡片 */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-2xl">
+                Balance: ${balance}
+              </CardTitle>
+              {isBalanceValidating && <Spinner size="sm" />}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <Separator />
+
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <h3 className="text-lg font-medium">Add Funds</h3>
+              </div>
+
+              {!showEmbeddedCheckout ? (
+                <>
+                  <div className="flex flex-wrap items-start gap-4 mb-4">
+                    {/* 快速金额按钮 */}
+                    <div className="flex gap-2">
+                      {[5, 10, 15, 20].map((val) => (
+                        <Button
+                          key={val}
+                          variant={rechargeAmount === val ? "default" : "outline"}
+                          size="lg"
+                          onClick={() => setRechargeAmount(val)}
+                        >
+                          ${val}
+                        </Button>
+                      ))}
+                    </div>
+
+                    {/* 自定义金额输入 */}
+                    <div className="flex flex-col">
+                      <Input
+                        type="number"
+                        step={1}
+                        value={rechargeAmount}
+                        min={5}
+                        onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                          onAmountChange(Number(e.target.value))
+                        }
+                        className="w-56"
+                        placeholder="Enter amount ($)"
+                      />
+                      {inputError && (
+                        <span className="text-sm text-red-500 mt-1">
+                          Minimum top-up: $5
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <Button
+                    disabled={!rechargeAmount || inputError || rechargeLoading}
+                    size="lg"
+                    onClick={handleRecharge}
+                    isLoading={rechargeLoading}
+                  >
+                    {rechargeLoading ? "Processing..." : "Confirm Top-up"}
+                  </Button>
+                </>
               ) : (
-                <Tr>
-                  <Td colSpan={5} textAlign="center">
-                    {isTransactionValidating
-                      ? "Loading"
-                      : "No transactions found"}
-                  </Td>
-                </Tr>
+                <div className="space-y-4">
+                  {/* 步骤2-4：嵌入式Stripe结账组件 */}
+                  <StripeCheckout
+                    amount={Number(rechargeAmount)}
+                    onSuccess={handlePaymentSuccess}
+                    onCancel={handlePaymentCancel}
+                  />
+                </div>
               )}
-            </Tbody>
-          </Table>
-          <Paginator
-            onPageChange={setPageNumber}
-            pageNumber={pageNumber}
-            loading={isTransactionValidating}
-            noMoreData={transactions.length === 0}
-          />
-          {/* <Button
-            isDisabled={!rechargeAmount || inputError}
-            colorScheme="purple"
-            size="lg"
-            onClick={() => {
-              handleConsume(20, TransactionType.CONSUME, "consume-20");
-            }}
-          >
-            mock consume
-          </Button> */}
-        </Box>
-      </VStack>
-    </Box>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 交易记录卡片 */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-lg">Recent Transactions</CardTitle>
+              {isTransactionValidating && <Spinner size="sm" />}
+            </div>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Time</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead>Description</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {transactions.length > 0 ? (
+                  transactions.map((item: Transaction) => (
+                    <TableRow key={item.id}>
+                      <TableCell>{formatToLocalTime(item.created_at)}</TableCell>
+                      <TableCell>{item.transaction_type}</TableCell>
+                      <TableCell>{item.amount}</TableCell>
+                      <TableCell>{item.description ?? "--"}</TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center">
+                      {isTransactionValidating
+                        ? "Loading"
+                        : "No transactions found"}
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+
+            <div className="mt-4">
+              <Paginator
+                onPageChange={setPageNumber}
+                pageNumber={pageNumber}
+                loading={isTransactionValidating}
+                noMoreData={transactions.length === 0}
+              />
+            </div>
+
+            {/* 模拟消费按钮 - 仅开发环境 */}
+            {isDev && (
+              <Button
+                disabled={!rechargeAmount || inputError}
+                size="lg"
+                onClick={() => {
+                  handleConsume(1, TransactionType.CONSUME_TEXT, "consume-1");
+                }}
+              >
+                mock consume
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
   );
 }
