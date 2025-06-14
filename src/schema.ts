@@ -67,10 +67,13 @@ export const AccountSchema = pgTable("account", {
     .references(() => UserSchema.id)
     .notNull(),
   balance: decimal("balance", { precision: 10, scale: 2 }).notNull(),
-  updatedAt: timestamp("updated_at", {
+  updated_at: timestamp("updated_at", {
     precision: 3,
     mode: "string",
   })
+    .defaultNow()
+    .notNull(),
+  created_at: timestamp("created_at", { precision: 3, mode: "string" })
     .defaultNow()
     .notNull(),
 });
