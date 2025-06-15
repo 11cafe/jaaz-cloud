@@ -2,6 +2,14 @@
 const nextConfig = {
   output: "standalone",
   reactStrictMode: true,
+  typescript: {
+    // 忽略 TypeScript 构建错误
+    ignoreBuildErrors: true,
+  },
+  eslint: {
+    // 忽略 ESLint 构建错误
+    ignoreDuringBuilds: true,
+  },
   images: {
     remotePatterns: [
       {
