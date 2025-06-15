@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: "standalone",
+  // output: "standalone", // 暂时先注释
   reactStrictMode: true,
   typescript: {
     // 忽略 TypeScript 构建错误
