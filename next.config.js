@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // output: "standalone", // 暂时先注释
+  output: "standalone", // Enable standalone output for Docker deployment
   reactStrictMode: true,
   typescript: {
     // 忽略 TypeScript 构建错误
