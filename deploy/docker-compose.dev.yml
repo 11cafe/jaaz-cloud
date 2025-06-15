@@ -1,0 +1,45 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: jaaz-postgres-dev
+    environment:
+      POSTGRES_DB: jaaz_dev
+      POSTGRES_USER: jaaz_user
+      POSTGRES_PASSWORD: jaaz_password_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jaaz_user -d jaaz_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: ..
+      dockerfile: dockerfile
+    container_name: jaaz-app-dev
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: postgresql://jaaz_user:jaaz_password_dev@postgres:5432/jaaz_dev
+      NEXTAUTH_URL: http://your-ec2-public-ip:3000
+      NEXTAUTH_SECRET: your-nextauth-secret-key-here
+      # Add other environment variables as needed
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - ../uploads:/app/uploads
+    command: sh -c "npm run build && npm start"
+
+volumes:
+  postgres_data:
