@@ -5,9 +5,10 @@ import { SessionProvider } from "next-auth/react";
 import { SWRConfig } from "swr";
 import { swrLocalStorageProvider } from "@/utils/swrutils";
 import { Toaster } from "@/components/ui/toaster";
+import "@/i18n";
 import "@/global.css";
 
-export default function App({
+function App({
   Component,
   pageProps: { session, ...pageProps },
 }: AppProps) {
@@ -36,3 +37,5 @@ export default function App({
     </>
   );
 }
+
+export default App;

@@ -23,7 +23,8 @@ import { defaultPageSize } from "@/utils/consts";
 import { ERechargePaymentState } from "@/consts/types";
 import { handleConsume } from "@/utils/handleConsume";
 import { formatToLocalTime } from "@/utils/datatimeUtils";
-import StripeCheckout from "@/components/StripeCheckout";
+import StripeCheckout from "@/components/billing/StripeCheckout";
+import { useTranslation } from 'react-i18next';
 
 /**
  * 计费页面组件 - Stripe支付流程的主入口
@@ -36,6 +37,7 @@ import StripeCheckout from "@/components/StripeCheckout";
  * 5. 更新用户余额和交易记录
  */
 export default function Billing() {
+  const { t } = useTranslation(['billing', 'common']);
   const { toast } = useToast();
   const isFirstRender = useIsFirstRender();
   const { mutate } = useSWRConfig();
@@ -121,7 +123,7 @@ export default function Billing() {
       window.location.href = response.url;
     } else {
       toast({
-        title: "Recharge failure",
+        title: t('billing:rechargeFailure'),
         description: response.error,
         variant: "warning",
       });
@@ -141,8 +143,8 @@ export default function Billing() {
       `/api/billing/listTransactions?pageSize=${defaultPageSize}&pageNumber=1`,
     );
     toast({
-      title: "Payment successful",
-      description: "Your account has been recharged successfully!",
+      title: t('billing:paymentSuccessful'),
+      description: t('billing:accountRechargedSuccessfully'),
       variant: "success",
     });
   };
@@ -171,7 +173,7 @@ export default function Billing() {
         `/api/billing/listTransactions?pageSize=${defaultPageSize}&pageNumber=1`,
       );
       toast({
-        title: "Recharge successful",
+        title: t('billing:rechargeSuccessful'),
         variant: "success",
       });
     } else if (rechargeResultCheckTime.current < 5) {
@@ -202,7 +204,7 @@ export default function Billing() {
         case ERechargePaymentState.CANCEL:
           // 支付取消
           toast({
-            title: "Recharge canceled",
+            title: t('billing:rechargeCanceled'),
             variant: "info",
           });
           break;
@@ -230,7 +232,7 @@ export default function Billing() {
           <CardHeader>
             <div className="flex items-center gap-2">
               <CardTitle className="text-2xl">
-                Balance: ${balance}
+                {t('billing:balance')}: ${balance}
               </CardTitle>
               {isBalanceValidating && <Spinner size="sm" />}
             </div>
@@ -240,7 +242,7 @@ export default function Billing() {
 
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <h3 className="text-lg font-medium">Add Funds</h3>
+                <h3 className="text-lg font-medium">{t('billing:addFunds')}</h3>
               </div>
 
               {!showEmbeddedCheckout ? (
@@ -271,11 +273,11 @@ export default function Billing() {
                           onAmountChange(Number(e.target.value))
                         }
                         className="w-56"
-                        placeholder="Enter amount ($)"
+                        placeholder={t('billing:enterAmount')}
                       />
                       {inputError && (
                         <span className="text-sm text-red-500 mt-1">
-                          Minimum top-up: $5
+                          {t('billing:minimumTopUp')}
                         </span>
                       )}
                     </div>
@@ -287,7 +289,7 @@ export default function Billing() {
                     onClick={handleRecharge}
                     isLoading={rechargeLoading}
                   >
-                    {rechargeLoading ? "Processing..." : "Confirm Top-up"}
+                    {rechargeLoading ? t('billing:processing') : t('billing:confirmTopUp')}
                   </Button>
                 </>
               ) : (
@@ -308,7 +310,7 @@ export default function Billing() {
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
-              <CardTitle className="text-lg">Recent Transactions</CardTitle>
+              <CardTitle className="text-lg">{t('billing:recentTransactions')}</CardTitle>
               {isTransactionValidating && <Spinner size="sm" />}
             </div>
           </CardHeader>
@@ -316,10 +318,10 @@ export default function Billing() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Time</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Description</TableHead>
+                  <TableHead>{t('billing:time')}</TableHead>
+                  <TableHead>{t('billing:type')}</TableHead>
+                  <TableHead>{t('billing:amount')}</TableHead>
+                  <TableHead>{t('billing:description')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -336,8 +338,8 @@ export default function Billing() {
                   <TableRow>
                     <TableCell colSpan={4} className="text-center">
                       {isTransactionValidating
-                        ? "Loading"
-                        : "No transactions found"}
+                        ? t('common:loading')
+                        : t('billing:noTransactionsFound')}
                     </TableCell>
                   </TableRow>
                 )}
@@ -362,7 +364,7 @@ export default function Billing() {
                   handleConsume(1, TransactionType.CONSUME_TEXT, "consume-1");
                 }}
               >
-                mock consume
+                {t('billing:mockConsume')}
               </Button>
             )}
           </CardContent>

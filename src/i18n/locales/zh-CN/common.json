@@ -1,0 +1,30 @@
+{
+  "welcome": "欢迎",
+  "hello": "你好",
+  "loading": "加载中...",
+  "error": "错误",
+  "success": "成功",
+  "cancel": "取消",
+  "confirm": "确认",
+  "save": "保存",
+  "delete": "删除",
+  "edit": "编辑",
+  "add": "添加",
+  "search": "搜索",
+  "login": "登录",
+  "logout": "退出登录",
+  "register": "注册",
+  "profile": "个人资料",
+  "settings": "设置",
+  "home": "首页",
+  "dashboard": "仪表板",
+  "back": "返回",
+  "next": "下一步",
+  "previous": "上一步",
+  "submit": "提交",
+  "close": "关闭",
+  "languages": {
+    "en": "English",
+    "zh-CN": "中文"
+  }
+}
