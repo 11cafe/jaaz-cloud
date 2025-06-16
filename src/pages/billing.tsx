@@ -98,11 +98,11 @@ export default function Billing() {
    */
   const handleRecharge = async () => {
     // 嵌入式支付流程
-    if (paymentMethod === 'embedded') {
-      // 显示嵌入式结账组件，该组件会调用createPaymentIntent API
-      setShowEmbeddedCheckout(true);
-      return;
-    }
+    // if (paymentMethod === 'embedded') {
+    //   // 显示嵌入式结账组件，该组件会调用createPaymentIntent API
+    //   setShowEmbeddedCheckout(true);
+    //   return;
+    // }
 
     // 重定向支付流程
     setRechargeLoading(true);
