@@ -19,8 +19,19 @@ jobs:
           node-version: "18"
           cache: "npm"
 
+      - name: Cache node modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.npm
+            node_modules
+            .next/cache
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build Next.js application
         run: npm run build
@@ -50,23 +61,46 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # Load the Docker image from tar file
+            # Ensure we have permission to work in /tmp
             cd /tmp
+
+            # Check if the file exists and is readable
+            if [ ! -f "jaaz-cloud-dev.tar.gz" ]; then
+              echo "Error: Docker image file not found!"
+              exit 1
+            fi
+
+            # Load the Docker image from tar file
+            echo "Extracting Docker image..."
             gunzip jaaz-cloud-dev.tar.gz
+
+            echo "Loading Docker image..."
             docker load -i jaaz-cloud-dev.tar
 
             # Stop and remove existing container
+            echo "Stopping existing container..."
             docker stop jaaz-cloud-dev || true
             docker rm jaaz-cloud-dev || true
 
             # Run new container
+            echo "Starting new container..."
             docker run -d \
               --name jaaz-cloud-dev \
               --restart unless-stopped \
               -p 3000:3000 \
-              --env-file ~/.env.dev \
+              --env-file /etc/jaaz-config/.env.dev \
               jaaz-cloud:dev
 
+            # Verify container is running
+            if docker ps | grep -q jaaz-cloud-dev; then
+              echo "Container started successfully!"
+            else
+              echo "Error: Container failed to start!"
+              docker logs jaaz-cloud-dev
+              exit 1
+            fi
+
             # Clean up
+            echo "Cleaning up temporary files..."
             rm -f /tmp/jaaz-cloud-dev.tar
             docker image prune -f
