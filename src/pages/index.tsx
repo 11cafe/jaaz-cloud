@@ -24,7 +24,7 @@ export default function Page({}: InferGetStaticPropsType<
         <title>Jaaz</title>
         <meta name="description" content="AI design agent" />
       </Head>
-      <h1>AI design agent</h1>
+      <h1>AI design agent, coming soon</h1>
     </div>
   );
 }
