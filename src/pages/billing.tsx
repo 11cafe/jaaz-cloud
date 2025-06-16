@@ -24,6 +24,7 @@ import { ERechargePaymentState } from "@/consts/types";
 import { handleConsume } from "@/utils/handleConsume";
 import { formatToLocalTime } from "@/utils/datatimeUtils";
 import StripeCheckout from "@/components/billing/StripeCheckout";
+import { RECHARGE_LIMITS } from "@/utils/billingUtil";
 import { useTranslation } from 'react-i18next';
 
 /**
@@ -34,7 +35,7 @@ import { useTranslation } from 'react-i18next';
  * 2. 选择支付方式（嵌入式支付 或 重定向到Stripe）
  * 3. 创建支付意图或结账会话
  * 4. 处理支付确认
- * 5. 更新用户余额和交易记录
+ * 5. Webhook 自动更新用户余额和交易记录
  */
 export default function Billing() {
   const { t } = useTranslation(['billing', 'common']);
@@ -55,7 +56,7 @@ export default function Billing() {
   // 开发者可以手动修改此变量来选择支付方式：
   // - 'embedded': 嵌入式支付，用户在当前页面完成支付
   // - 'redirect': 重定向支付，跳转到Stripe托管页面完成支付
-  const paymentMethod: 'redirect' | 'embedded' = 'redirect';
+  const paymentMethod: 'redirect' | 'embedded' = 'embedded';
 
   // 充值结果检查次数计数器
   const rechargeResultCheckTime = useRef(0);
@@ -99,7 +100,7 @@ export default function Billing() {
   const handleRecharge = async () => {
     // 嵌入式支付流程
     if (paymentMethod === 'embedded') {
-      // 显示嵌入式结账组件，该组件会调用createPaymentIntent API
+      // 显示嵌入式结账组件，支付成功后 webhook 自动处理数据库更新
       setShowEmbeddedCheckout(true);
       return;
     }
@@ -134,19 +135,25 @@ export default function Billing() {
   /**
    * 步骤5：处理支付成功回调（嵌入式支付）
    * 当StripeCheckout组件确认支付成功后调用
+   * 使用延迟刷新以确保 webhook 有时间处理数据库更新
    */
   const handlePaymentSuccess = () => {
     setShowEmbeddedCheckout(false);
-    // 刷新余额和交易记录数据
-    mutate("/api/billing/getBalance");
-    mutate(
-      `/api/billing/listTransactions?pageSize=${defaultPageSize}&pageNumber=1`,
-    );
+
+    // 立即显示成功消息
     toast({
       title: t('billing:paymentSuccessful'),
       description: t('billing:accountRechargedSuccessfully'),
       variant: "success",
     });
+
+    // 延迟刷新数据，给 webhook 时间处理
+    setTimeout(() => {
+      mutate("/api/billing/getBalance");
+      mutate(
+        `/api/billing/listTransactions?pageSize=${defaultPageSize}&pageNumber=1`,
+      );
+    }, 2000); // 2秒延迟
   };
 
   /**
@@ -217,7 +224,27 @@ export default function Billing() {
     }
   }, [toast]);
 
-  const inputError = typeof rechargeAmount === "number" && rechargeAmount < 1;
+  // 金额验证逻辑
+  const validateAmount = (amount: number | string): { valid: boolean; error?: string } => {
+    const numAmount = Number(amount);
+
+    if (!Number.isFinite(numAmount) || numAmount <= 0) {
+      return { valid: false, error: t('billing:invalidAmount') };
+    }
+
+    if (numAmount < RECHARGE_LIMITS.MIN_AMOUNT) {
+      return { valid: false, error: t('billing:minimumAmount') };
+    }
+
+    if (numAmount > RECHARGE_LIMITS.MAX_AMOUNT) {
+      return { valid: false, error: t('billing:maximumAmount') };
+    }
+
+    return { valid: true };
+  };
+
+  const amountValidation = validateAmount(rechargeAmount);
+  const inputError = !amountValidation.valid;
 
   // 避免React水合错误，使此页面成为客户端渲染组件
   if (isFirstRender) {
@@ -250,7 +277,7 @@ export default function Billing() {
                   <div className="flex flex-wrap items-start gap-4 mb-4">
                     {/* 快速金额按钮 */}
                     <div className="flex gap-2">
-                      {[5, 10, 15, 20].map((val) => (
+                      {[5, 10, 20, 50].map((val) => (
                         <Button
                           key={val}
                           variant={rechargeAmount === val ? "default" : "outline"}
@@ -268,7 +295,8 @@ export default function Billing() {
                         type="number"
                         step={1}
                         value={rechargeAmount}
-                        min={5}
+                        min={RECHARGE_LIMITS.MIN_AMOUNT}
+                        max={RECHARGE_LIMITS.MAX_AMOUNT}
                         onChange={(e: ChangeEvent<HTMLInputElement>) =>
                           onAmountChange(Number(e.target.value))
                         }
@@ -277,7 +305,7 @@ export default function Billing() {
                       />
                       {inputError && (
                         <span className="text-sm text-red-500 mt-1">
-                          {t('billing:minimumTopUp')}
+                          {amountValidation.error}
                         </span>
                       )}
                     </div>

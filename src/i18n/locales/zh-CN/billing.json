@@ -23,11 +23,17 @@
   "processingPayment": "处理支付中...",
   "paymentSucceeded": "支付成功！",
   "paymentProcessing": "您的支付正在处理中。",
+  "paymentProcessingDescription": "支付处理可能需要几分钟时间，您的余额将在处理完成后自动更新。",
   "paymentFailed": "您的支付未成功，请重试。",
   "somethingWentWrong": "出现了问题。",
   "paymentFailed2": "支付失败",
   "unexpectedError": "发生了意外错误。",
   "initializingPayment": "初始化支付中...",
   "error": "错误",
-  "failedToInitializePayment": "初始化支付失败"
+  "failedToInitializePayment": "初始化支付失败",
+  "minimumAmount": "最低充值金额为 $1",
+  "maximumAmount": "最高充值金额为 $1,000",
+  "invalidAmount": "请输入有效金额",
+  "amountTooHigh": "金额超过最大限制",
+  "amountTooLow": "金额低于最小限制"
 }

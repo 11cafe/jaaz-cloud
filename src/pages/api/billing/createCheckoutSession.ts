@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/pages/api/auth/[...nextauth]";
 import { ERechargePaymentState } from "@/consts/types";
+import { validateRechargeAmount } from "@/utils/billingUtil";
 
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
@@ -30,8 +31,11 @@ export default async function handler(
 
   // 验证请求参数：充值金额
   const { amount } = req.body;
-  if (!amount) {
-    res.status(400).json({ error: "The amount should not be null." });
+
+  // 使用统一的金额验证函数
+  const amountValidation = validateRechargeAmount(amount);
+  if (!amountValidation.valid) {
+    res.status(400).json({ error: amountValidation.error });
     return;
   }
 
