@@ -56,7 +56,7 @@ export default function Billing() {
   // 开发者可以手动修改此变量来选择支付方式：
   // - 'embedded': 嵌入式支付，用户在当前页面完成支付
   // - 'redirect': 重定向支付，跳转到Stripe托管页面完成支付
-  const paymentMethod: 'redirect' | 'embedded' = 'embedded';
+  const paymentMethod: 'redirect' | 'embedded' = 'redirect';
 
   // 充值结果检查次数计数器
   const rechargeResultCheckTime = useRef(0);
@@ -99,11 +99,11 @@ export default function Billing() {
    */
   const handleRecharge = async () => {
     // 嵌入式支付流程
-    if (paymentMethod === 'embedded') {
-      // 显示嵌入式结账组件，支付成功后 webhook 自动处理数据库更新
-      setShowEmbeddedCheckout(true);
-      return;
-    }
+    // if (paymentMethod === 'embedded') {
+    //   // 显示嵌入式结账组件，支付成功后 webhook 自动处理数据库更新
+    //   setShowEmbeddedCheckout(true);
+    //   return;
+    // }
 
     // 重定向支付流程
     setRechargeLoading(true);
