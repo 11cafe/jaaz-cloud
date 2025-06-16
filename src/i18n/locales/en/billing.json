@@ -23,11 +23,17 @@
   "processingPayment": "Processing payment...",
   "paymentSucceeded": "Payment succeeded!",
   "paymentProcessing": "Your payment is processing.",
+  "paymentProcessingDescription": "Payment processing may take a few minutes, your balance will be updated automatically when completed.",
   "paymentFailed": "Your payment was not successful, please try again.",
   "somethingWentWrong": "Something went wrong.",
   "paymentFailed2": "Payment failed",
   "unexpectedError": "An unexpected error occurred.",
   "initializingPayment": "Initializing payment...",
   "error": "Error",
-  "failedToInitializePayment": "Failed to initialize payment"
+  "failedToInitializePayment": "Failed to initialize payment",
+  "minimumAmount": "Minimum recharge amount is $1",
+  "maximumAmount": "Maximum recharge amount is $1,000",
+  "invalidAmount": "Please enter a valid amount",
+  "amountTooHigh": "Amount exceeds the maximum limit",
+  "amountTooLow": "Amount is below the minimum limit"
 }

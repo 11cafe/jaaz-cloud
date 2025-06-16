@@ -1,6 +1,12 @@
-import { AccountSchema, TransactionsSchema, TransactionType } from "@/schema";
+import {
+  AccountSchema,
+  TransactionsSchema,
+  TransactionType,
+  UserSchema,
+} from "@/schema";
 import { drizzleDb } from "@/server/db-adapters/PostgresAdapter";
 import { addWithPrecision } from "@/utils/mathUtils";
+import { validateRechargeAmount } from "@/utils/billingUtil";
 import { and, eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { NextApiRequest, NextApiResponse } from "next";
@@ -13,15 +19,77 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20", // Use the latest stable API version
 });
 
-// const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
-const endpointSecret =
-  "whsec_55d432895a9fd76bd5a7f6537023f52b94c35bf87f7cae36b045b4e5fc70aac2";
+const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+// const endpointSecret = "";
 
 export const config = {
   api: {
     bodyParser: false, // Disable Next.js default body parser
   },
 };
+
+/**
+ * 检查用户是否存在且账户状态正常
+ */
+async function validateUser(
+  userId: number,
+): Promise<{ valid: boolean; error?: string }> {
+  try {
+    const userRows = await drizzleDb
+      .select()
+      .from(UserSchema)
+      .where(eq(UserSchema.id, userId))
+      .limit(1);
+
+    if (userRows.length === 0) {
+      return {
+        valid: false,
+        error: `User with ID ${userId} not found in database`,
+      };
+    }
+
+    // 这里可以添加更多用户状态检查，比如账户是否被禁用等
+    // const user = userRows[0];
+    // if (user.status === 'banned') {
+    //   return { valid: false, error: "User account is suspended" };
+    // }
+
+    return { valid: true };
+  } catch (error) {
+    console.log("❌ Error validating user:", error);
+    return {
+      valid: false,
+      error: `Database error during user validation: ${error}`,
+    };
+  }
+}
+
+/**
+ * 记录失败的支付尝试或过期会话（用于审计和分析）
+ */
+async function logFailedPayment(
+  userId: number,
+  sessionId: string,
+  amount: number,
+  reason: string,
+): Promise<void> {
+  try {
+    await drizzleDb.insert(TransactionsSchema).values({
+      id: nanoid(),
+      author_id: userId,
+      amount: sql`${amount}`,
+      stripe_session_id: sessionId,
+      previous_balance: sql`0`, // 失败的支付不影响余额
+      after_balance: sql`0`,
+      description: `Failed/Expired payment: ${reason}`,
+      transaction_type: TransactionType.RECHARGE_FAILED,
+      created_at: new Date().toISOString(),
+    });
+    console.log("✅ Failed payment logged to database");
+  } catch (error) {
+    console.log("❌ Error logging failed payment:", error);
+  }
+}
 
 export default async function handler(
   req: NextApiRequest,
@@ -102,9 +170,33 @@ export default async function handler(
 
         console.log("User ID from metadata:", checkoutUserId);
 
+        // 验证用户存在性
+        const userIdInt = parseInt(checkoutUserId, 10);
+        const userValidation = await validateUser(userIdInt);
+        if (!userValidation.valid) {
+          console.log("❌ User validation failed:", userValidation.error);
+          return;
+        }
+        console.log("✅ User validation passed");
+
+        // 验证充值金额
+        const checkoutAmount = (checkoutSession.amount_total || 0) / 100;
+        const amountValidation = validateRechargeAmount(checkoutAmount);
+        if (!amountValidation.valid) {
+          console.log("❌ Amount validation failed:", amountValidation.error);
+          // 记录失败的支付尝试
+          await logFailedPayment(
+            userIdInt,
+            checkoutSession.id,
+            checkoutAmount,
+            amountValidation.error!,
+          );
+          return;
+        }
+        console.log("✅ Amount validation passed");
+
         // Check for duplicates
         console.log("Checking for duplicate transactions...");
-        const userIdInt = parseInt(checkoutUserId, 10);
         const sessionIdDuplicateCheck = await drizzleDb
           .select()
           .from(TransactionsSchema)
@@ -132,8 +224,6 @@ export default async function handler(
         await drizzleDb.transaction(async (trx) => {
           const amount = checkoutSession.amount_total / 100; // Amount in cents
           console.log("Processing amount:", amount);
-
-          const userIdInt = parseInt(checkoutUserId, 10);
 
           console.log("Fetching current balance for user:", userIdInt);
           const accountResList = await trx.execute(
@@ -215,7 +305,30 @@ export default async function handler(
 
         console.log("User ID from payment intent:", paymentUserId);
 
+        // 验证用户存在性
         const paymentUserIdInt = parseInt(paymentUserId, 10);
+        const paymentUserValidation = await validateUser(paymentUserIdInt);
+        if (!paymentUserValidation.valid) {
+          console.log(
+            "❌ User validation failed:",
+            paymentUserValidation.error,
+          );
+          return;
+        }
+        console.log("✅ User validation passed");
+
+        // 验证充值金额
+        const paymentAmount = (paymentIntent.amount || 0) / 100;
+        const paymentAmountValidation = validateRechargeAmount(paymentAmount);
+        if (!paymentAmountValidation.valid) {
+          console.log(
+            "❌ Amount validation failed:",
+            paymentAmountValidation.error,
+          );
+          return;
+        }
+        console.log("✅ Amount validation passed");
+
         const paymentIdDuplicateCheck = await drizzleDb
           .select()
           .from(TransactionsSchema)
@@ -275,6 +388,95 @@ export default async function handler(
         });
 
         console.log("✅ payment_intent.succeeded processing completed");
+        break;
+
+      case "payment_intent.payment_failed":
+        console.log("\n=== Processing payment_intent.payment_failed ===");
+        /**
+         * Handle PaymentIntent failure events
+         * 1. Log the failure for debugging and user support;
+         * 2. Optionally record failed payment attempt in database;
+         */
+        const failedPaymentIntent = event.data.object as Stripe.PaymentIntent;
+
+        const failedUserId = failedPaymentIntent.metadata?.userId;
+
+        // Skip if not a recharge payment
+        if (failedPaymentIntent.metadata?.type !== "recharge") {
+          console.log("⚠️ Failed PaymentIntent is not a recharge, skipping");
+          return;
+        }
+
+        if (failedUserId) {
+          const failedUserIdInt = parseInt(failedUserId, 10);
+          const failedAmount = (failedPaymentIntent.amount || 0) / 100;
+          const failureReason =
+            failedPaymentIntent.last_payment_error?.message || "Payment failed";
+
+          console.log(
+            `💳 Payment failed for user ${failedUserId}: $${failedAmount} - ${failureReason}`,
+          );
+
+          // 记录失败的支付尝试用于分析
+          await logFailedPayment(
+            failedUserIdInt,
+            failedPaymentIntent.id,
+            failedAmount,
+            failureReason,
+          );
+        } else {
+          console.log("❌ No userId found in failed payment intent metadata");
+        }
+
+        console.log("✅ payment_intent.payment_failed processing completed");
+        break;
+
+      case "checkout.session.expired":
+        console.log("\n=== Processing checkout.session.expired ===");
+        /**
+         * Handle Checkout Session expiration events
+         * 1. Log the expiration for debugging and user support;
+         * 2. Record expired session attempt in database for analysis;
+         */
+        const expiredSession = event.data.object as Stripe.Checkout.Session;
+        console.log("Expired session ID:", expiredSession.id);
+        console.log(
+          "Expired session metadata:",
+          JSON.stringify(expiredSession.metadata, null, 2),
+        );
+        console.log("Session amount:", expiredSession.amount_total);
+
+        const expiredUserId = expiredSession.metadata?.userId;
+
+        if (expiredUserId) {
+          const expiredUserIdInt = parseInt(expiredUserId, 10);
+          const expiredAmount = (expiredSession.amount_total || 0) / 100;
+
+          console.log(
+            `⏰ Checkout session expired for user ${expiredUserId}: $${expiredAmount}`,
+          );
+
+          // 验证用户存在性
+          const expiredUserValidation = await validateUser(expiredUserIdInt);
+          if (!expiredUserValidation.valid) {
+            console.log(
+              "❌ User validation failed for expired session:",
+              expiredUserValidation.error,
+            );
+          } else {
+            // 记录过期的会话尝试用于分析
+            await logFailedPayment(
+              expiredUserIdInt,
+              expiredSession.id,
+              expiredAmount,
+              "Checkout session expired - user did not complete payment in time",
+            );
+          }
+        } else {
+          console.log("❌ No userId found in expired session metadata");
+        }
+
+        console.log("✅ checkout.session.expired processing completed");
         break;
 
       default:

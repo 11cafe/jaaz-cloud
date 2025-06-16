@@ -26,6 +26,7 @@ interface CheckoutFormProps {
 /**
  * 步骤3-4：结账表单组件（嵌入式支付）
  * 处理支付元素的渲染和支付确认
+ * 使用 webhook 处理支付成功后的数据库更新
  */
 function CheckoutForm({ amount, onSuccess, onCancel }: CheckoutFormProps) {
   const stripe = useStripe();
@@ -35,7 +36,6 @@ function CheckoutForm({ amount, onSuccess, onCancel }: CheckoutFormProps) {
 
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
 
   // 检查URL中是否有支付意图的客户端密钥（用于处理重定向回来的情况）
   useEffect(() => {
@@ -56,6 +56,7 @@ function CheckoutForm({ amount, onSuccess, onCancel }: CheckoutFormProps) {
       switch (paymentIntent?.status) {
         case 'succeeded':
           setMessage(t('billing:paymentSucceeded'));
+          setTimeout(() => onSuccess(), 1000);
           break;
         case 'processing':
           setMessage(t('billing:paymentProcessing'));
@@ -68,51 +69,11 @@ function CheckoutForm({ amount, onSuccess, onCancel }: CheckoutFormProps) {
           break;
       }
     });
-  }, [stripe, t]);
-
-  /**
-   * 步骤4：轮询检查支付状态
-   * 由于支付处理可能需要时间，需要定期检查支付状态
-   * @param intentId 支付意图ID
-   */
-  const checkPaymentStatus = async (intentId: string) => {
-    try {
-      // 调用后端API检查支付状态
-      const response = await fetch('/api/billing/checkPaymentStatus', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paymentIntentId: intentId }),
-      });
-
-      const data = await response.json();
-
-      if (data.status === 'succeeded' || data.status === 'already_processed') {
-        // 支付成功或已处理
-        setMessage(t('billing:paymentSucceeded'));
-        toast({
-          title: t('billing:paymentSuccessful'),
-          description: t('billing:accountRechargedSuccessfully'),
-          variant: 'success',
-        });
-        setTimeout(() => onSuccess(), 1000);
-      } else if (data.status === 'processing') {
-        // 支付处理中，继续轮询
-        setTimeout(() => checkPaymentStatus(intentId), 2000);
-      } else {
-        // 支付失败或其他状态
-        setMessage(`${t('billing:paymentFailed2')} ${data.status}. ${t('billing:paymentFailed')}`);
-        setIsLoading(false);
-      }
-    } catch (error) {
-      console.error('Error checking payment status:', error);
-      setMessage(t('billing:unexpectedError'));
-      setIsLoading(false);
-    }
-  };
+  }, [stripe, t, onSuccess]);
 
   /**
    * 步骤3：处理支付表单提交
-   * 确认支付并开始状态检查流程
+   * 确认支付，webhook 将自动处理后续的数据库更新
    */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -148,12 +109,25 @@ function CheckoutForm({ amount, onSuccess, onCancel }: CheckoutFormProps) {
     } else if (paymentIntent) {
       // 支付成功或处理中
       if (paymentIntent.status === 'succeeded') {
-        // 支付成功，检查后端处理状态
-        checkPaymentStatus(paymentIntent.id);
+        // 支付成功，webhook 将自动处理余额更新
+        setMessage(t('billing:paymentSucceeded'));
+        toast({
+          title: t('billing:paymentSuccessful'),
+          description: t('billing:accountRechargedSuccessfully'),
+          variant: 'success',
+        });
+        setTimeout(() => onSuccess(), 1000);
       } else if (paymentIntent.status === 'processing') {
-        // 支付处理中，开始轮询状态
+        // 支付处理中，webhook 将在处理完成后更新数据库
         setMessage(t('billing:paymentProcessing'));
-        checkPaymentStatus(paymentIntent.id);
+        toast({
+          title: t('billing:paymentProcessing'),
+          description: t('billing:paymentProcessingDescription'),
+          variant: 'default',
+        });
+        // 支付处理中时也调用 onSuccess，让用户返回主界面
+        // webhook 会在后台完成余额更新
+        setTimeout(() => onSuccess(), 2000);
       } else {
         setMessage(`${t('billing:paymentFailed2')} ${paymentIntent.status}`);
         setIsLoading(false);
@@ -228,17 +202,16 @@ interface StripeCheckoutProps {
 /**
  * 步骤2：Stripe结账主组件（嵌入式支付模式）
  *
- * 嵌入式支付流程：
+ * 新的嵌入式支付流程（使用 webhook）：
  * 1. 用户选择充值金额并选择嵌入式支付
  * 2. 组件初始化时调用createPaymentIntent API创建支付意图
  * 3. 使用返回的客户端密钥初始化Stripe Elements
  * 4. 用户填写支付信息并提交
- * 5. 确认支付并轮询检查支付状态
- * 6. 支付成功后更新用户余额和交易记录
+ * 5. 确认支付成功后，Stripe webhook 自动处理数据库更新
+ * 6. 前端显示成功消息并刷新数据
  */
 export default function StripeCheckout({ amount, onSuccess, onCancel }: StripeCheckoutProps) {
   const [clientSecret, setClientSecret] = useState('');
-  const [paymentIntentId, setPaymentIntentId] = useState('');
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const { t } = useTranslation();
@@ -257,9 +230,6 @@ export default function StripeCheckout({ amount, onSuccess, onCancel }: StripeCh
         if (data.clientSecret) {
           // 设置客户端密钥用于初始化Stripe Elements
           setClientSecret(data.clientSecret);
-          // 从客户端密钥中提取支付意图ID
-          const intentId = data.clientSecret.split('_secret_')[0];
-          setPaymentIntentId(intentId);
         } else {
           // 创建支付意图失败
           toast({
