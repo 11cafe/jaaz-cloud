@@ -87,7 +87,7 @@ jobs:
             docker run -d \
               --name jaaz-cloud-dev \
               --restart unless-stopped \
-              -p 3000:3000 \
+              -p 3001:3000 \
               --env-file /etc/jaaz-config/.env.dev \
               jaaz-cloud:dev
 
