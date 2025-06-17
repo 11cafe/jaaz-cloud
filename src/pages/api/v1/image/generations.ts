@@ -6,6 +6,7 @@ import {
   checkUserBalance,
   createInsufficientBalanceResponse,
 } from "@/utils/balanceCheck";
+import NextCors from "nextjs-cors";
 
 // Allow longer responses for image generation
 export const maxDuration = 120;
@@ -22,6 +23,20 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
 ) {
+
+  await NextCors(req, res, {
+    methods: ["POST", "OPTIONS"],
+    origin: "*",
+    credentials: false,
+    optionsSuccessStatus: 200,
+    allowedHeaders: ["Content-Type", "Authorization"],
+  });
+
+  // Handle preflight requests
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
   // Only allow POST requests
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
