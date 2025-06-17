@@ -14,9 +14,12 @@ export const maxDuration = 120;
 // Image generation pricing by model
 const IMAGE_MODEL_PRICING: Record<string, number> = {
   "google/imagen-4": 0.04,
-  "recraft-ai/recraft-v3": 0.04,
-  "ideogram-ai/ideogram-v2-turbo": 0.05,
+  "google/imagen-4-ultra": 0.06,
   "black-forest-labs/flux-1.1-pro": 0.04,
+  "black-forest-labs/flux-kontext-pro": 0.04,
+  "black-forest-labs/flux-kontext-max": 0.08,
+  "recraft-ai/recraft-v3": 0.04,
+  "ideogram-ai/ideogram-v3-balanced": 0.06,
 };
 
 export default async function handler(
