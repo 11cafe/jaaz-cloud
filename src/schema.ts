@@ -17,6 +17,7 @@ export enum TransactionType {
   CONSUME_TEXT = "CONSUME_TEXT",
   CONSUME_IMAGE = "CONSUME_IMAGE",
   CONSUME_OTHER = "CONSUME_OTHER",
+  REWARD = "REWARD",
 }
 
 export const UserSchema = pgTable(
