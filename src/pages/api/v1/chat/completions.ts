@@ -75,6 +75,7 @@ export default async function handler(
     // Add usage tracking to the request
     const modifiedBody = {
       ...requestBody,
+      stream: true,
       usage: {
         include: true,
       },
