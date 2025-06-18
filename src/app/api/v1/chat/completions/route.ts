@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import OpenAI from "openai";
 import { authenticateAppRequest } from "@/utils/auth";
 import { serverConsume } from "@/utils/serverConsume";
 import { TransactionType } from "@/schema";
@@ -6,6 +7,28 @@ import {
   checkUserBalance,
   createInsufficientBalanceResponse,
 } from "@/utils/balanceCheck";
+
+// 扩展 OpenAI 类型以包含 OpenRouter 的 cost 字段
+interface ExtendedCompletionUsage extends OpenAI.CompletionUsage {
+  cost?: number;
+  prompt_tokens_details?: {
+    cached_tokens?: number;
+    [key: string]: any;
+  };
+  completion_tokens_details?: {
+    reasoning_tokens?: number;
+    [key: string]: any;
+  };
+}
+
+interface ExtendedChatCompletionChunk
+  extends Omit<OpenAI.ChatCompletionChunk, "usage"> {
+  usage?: ExtendedCompletionUsage | null;
+}
+
+interface ExtendedChatCompletion extends Omit<OpenAI.ChatCompletion, "usage"> {
+  usage?: ExtendedCompletionUsage;
+}
 
 // 关于这个 api 为什么要写在这里，为了支持 streaming
 // 可参考： https://dev.to/bsorrentino/how-to-stream-data-over-http-using-nextjs-1kmb
@@ -77,219 +100,147 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Initialize OpenAI client with OpenRouter configuration
+    const openai = new OpenAI({
+      baseURL: "https://openrouter.ai/api/v1",
+      apiKey: openrouterApiKey,
+      defaultHeaders: {
+        "HTTP-Referer": req.headers.get("referer") || "https://jaaz.app",
+        "X-Title": req.headers.get("x-title") || "Jaaz App",
+      },
+    });
+
     // Parse the request body
     const requestBody = await req.json();
 
-    // Add usage tracking to the request while preserving original stream setting
-    const modifiedBody = {
-      ...requestBody,
-      usage: {
-        include: true,
-      },
-    };
-
-    // Prepare headers for OpenRouter
-    const headers: Record<string, string> = {
-      Authorization: `Bearer ${openrouterApiKey}`,
-      "Content-Type": "application/json",
-    };
-
-    // Add optional headers for OpenRouter analytics
-    const referer = req.headers.get("referer");
-    if (referer) {
-      headers["HTTP-Referer"] = referer;
-    }
-
-    const title = req.headers.get("x-title");
-    if (title) {
-      headers["X-Title"] = title;
-    } else {
-      headers["X-Title"] = "JAAZ Cloud Chat";
-    }
-
     // Log the request for the authenticated user
     console.log(
-      `Chat request from user: ${username} (ID: ${userId}), model: ${modifiedBody.model}`,
+      `Chat request from user: ${username} (ID: ${userId}), model: ${requestBody.model}`,
     );
 
-    // Forward request to OpenRouter
-    const openrouterResponse = await fetch(
-      "https://openrouter.ai/api/v1/chat/completions",
-      {
-        method: "POST",
-        headers,
-        body: JSON.stringify(modifiedBody),
-      },
-    );
+    // Check if streaming is requested
+    const isStreamingRequest = requestBody.stream === true;
 
-    // Check if response is successful
-    if (!openrouterResponse.ok) {
-      console.error(
-        `OpenRouter error: ${openrouterResponse.status} - ${openrouterResponse.statusText}`,
-      );
-      const errorText = await openrouterResponse.text();
-      return new Response(errorText, {
-        status: openrouterResponse.status,
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
+    if (isStreamingRequest) {
+      // Handle streaming response - 使用正确的参数
+      const response = await openai.chat.completions.create({
+        ...requestBody,
+        stream: true,
+        stream_options: {
+          include_usage: true,
         },
       });
-    }
 
-    // Check if OpenRouter actually returned streaming response
-    const contentType = openrouterResponse.headers.get("content-type");
-    const isStreaming = contentType?.includes("text/event-stream");
+      // For streaming, the response is actually a stream
+      const stream = response as any; // Type assertion needed for OpenRouter compatibility
 
-    if (isStreaming) {
-      // For streaming responses, we need to intercept the stream to capture usage data
-      // Create a new readable stream that processes the original stream
+      // Create a new readable stream that processes the OpenAI stream
       const transformedStream = new ReadableStream({
-        start(controller) {
-          const reader = openrouterResponse.body?.getReader();
-          if (!reader) {
-            controller.close();
-            return;
-          }
+        async start(controller) {
+          const encoder = new TextEncoder();
 
-          const decoder = new TextDecoder();
-          let buffer = "";
+          try {
+            for await (const chunk of stream) {
+              // Type assertion for the chunk to include our extended usage
+              const extendedChunk = chunk as ExtendedChatCompletionChunk;
 
-          const processChunk = async () => {
-            try {
-              const { done, value } = await reader.read();
+              // Check if this chunk contains usage information
+              if (extendedChunk.usage) {
+                // console.log(
+                //   `Token usage for ${username} (${userId}) [STREAMING]:`,
+                //   {
+                //     model: requestBody.model,
+                //     prompt_tokens: extendedChunk.usage.prompt_tokens,
+                //     completion_tokens: extendedChunk.usage.completion_tokens,
+                //     total_tokens: extendedChunk.usage.total_tokens,
+                //     cost: extendedChunk.usage.cost,
+                //     cached_tokens:
+                //       extendedChunk.usage.prompt_tokens_details
+                //         ?.cached_tokens || 0,
+                //     reasoning_tokens:
+                //       extendedChunk.usage.completion_tokens_details
+                //         ?.reasoning_tokens || 0,
+                //     timestamp: new Date().toISOString(),
+                //   },
+                // );
 
-              if (done) {
-                controller.close();
-                return;
-              }
+                // Record consumption based on cost
+                if (extendedChunk.usage.cost && extendedChunk.usage.cost > 0) {
+                  const description = `type: text, model: ${requestBody.model}, total_tokens: ${extendedChunk.usage.total_tokens}`;
 
-              const chunk = decoder.decode(value, { stream: true });
-              buffer += chunk;
-
-              // Process complete SSE messages
-              const lines = buffer.split("\n");
-              buffer = lines.pop() || ""; // Keep incomplete line in buffer
-
-              for (const line of lines) {
-                if (line.startsWith("data: ")) {
-                  const data = line.slice(6).trim();
-
-                  if (data === "[DONE]") {
-                    // Forward the DONE message and close
-                    controller.enqueue(new TextEncoder().encode(line + "\n"));
-                    controller.close();
-                    return;
-                  }
-
-                  try {
-                    const jsonData = JSON.parse(data);
-
-                    // Check if this chunk contains usage information
-                    if (jsonData.usage) {
-                      // console.log(
-                      //   `Token usage for ${username} (${userId}) [STREAMING]:`,
-                      //   {
-                      //     model: modifiedBody.model,
-                      //     prompt_tokens: jsonData.usage.prompt_tokens,
-                      //     completion_tokens: jsonData.usage.completion_tokens,
-                      //     total_tokens: jsonData.usage.total_tokens,
-                      //     cost: jsonData.usage.cost,
-                      //     cached_tokens:
-                      //       jsonData.usage.prompt_tokens_details
-                      //         ?.cached_tokens || 0,
-                      //     reasoning_tokens:
-                      //       jsonData.usage.completion_tokens_details
-                      //         ?.reasoning_tokens || 0,
-                      //     timestamp: new Date().toISOString(),
-                      //   },
-                      // );
-
-                      // Record consumption based on cost
-                      if (jsonData.usage.cost && jsonData.usage.cost > 0) {
-                        const description = `type: text, model: ${modifiedBody.model}, total_tokens: ${jsonData.usage.total_tokens}`;
-
-                        serverConsume({
-                          userId,
-                          amount: jsonData.usage.cost,
-                          description,
-                          transactionType: TransactionType.CONSUME_TEXT,
-                        }).catch((error) => {
-                          console.error(
-                            `Failed to record consumption for user ${username} (${userId}):`,
-                            error,
-                          );
-                        });
-                      }
-                    }
-                  } catch (parseError) {
-                    // If JSON parsing fails, it's likely a comment or malformed data
-                    // Just forward it as-is
-                  }
+                  serverConsume({
+                    userId,
+                    amount: extendedChunk.usage.cost,
+                    description,
+                    transactionType: TransactionType.CONSUME_TEXT,
+                  }).catch((error) => {
+                    console.error(
+                      `Failed to record consumption for user ${username} (${userId}):`,
+                      error,
+                    );
+                  });
                 }
-
-                // Forward the line to the client
-                controller.enqueue(new TextEncoder().encode(line + "\n"));
               }
 
-              processChunk();
-            } catch (error) {
-              console.error("Error processing streaming chunk:", error);
-              controller.error(error);
+              // Convert chunk to SSE format and send to client
+              const sseData = `data: ${JSON.stringify(chunk)}\n\n`;
+              controller.enqueue(encoder.encode(sseData));
             }
-          };
 
-          processChunk();
+            // Send the final [DONE] message
+            controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+            controller.close();
+          } catch (error) {
+            console.error("Error processing streaming response:", error);
+            controller.error(error);
+          }
         },
       });
 
-      // Create response headers
-      const responseHeaders = new Headers();
-
-      // Copy all headers from OpenRouter response
-      openrouterResponse.headers.forEach((value, key) => {
-        responseHeaders.set(key, value);
-      });
-
-      // Add CORS headers
-      responseHeaders.set("Access-Control-Allow-Origin", "*");
-      responseHeaders.set("Access-Control-Allow-Methods", "POST, OPTIONS");
-      responseHeaders.set(
-        "Access-Control-Allow-Headers",
-        "Content-Type, Authorization, X-Title",
-      );
-
-      // Return the transformed streaming response
       return new Response(transformedStream, {
-        status: openrouterResponse.status,
-        headers: responseHeaders,
+        status: 200,
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          Connection: "keep-alive",
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "POST, OPTIONS",
+          "Access-Control-Allow-Headers":
+            "Content-Type, Authorization, X-Title",
+        },
       });
     } else {
-      // For non-streaming responses, parse JSON and log usage
-      const responseData = await openrouterResponse.json();
+      // Handle non-streaming response
+      const completion = (await openai.chat.completions.create({
+        ...requestBody,
+        stream: false,
+        stream_options: {
+          include_usage: true,
+        },
+      })) as ExtendedChatCompletion;
 
       // Log token usage if available
-      if (responseData.usage) {
-        // console.log(`Token usage for ${username} (${userId}):`, {
-        //   model: modifiedBody.model,
-        //   prompt_tokens: responseData.usage.prompt_tokens,
-        //   completion_tokens: responseData.usage.completion_tokens,
-        //   total_tokens: responseData.usage.total_tokens,
-        //   cost: responseData.usage.cost,
-        //   cached_tokens:
-        //     responseData.usage.prompt_tokens_details?.cached_tokens || 0,
-        //   reasoning_tokens:
-        //     responseData.usage.completion_tokens_details?.reasoning_tokens || 0,
-        //   timestamp: new Date().toISOString(),
-        // });
+      if (completion.usage) {
+        console.log(`Token usage for ${username} (${userId}):`, {
+          model: requestBody.model,
+          prompt_tokens: completion.usage.prompt_tokens,
+          completion_tokens: completion.usage.completion_tokens,
+          total_tokens: completion.usage.total_tokens,
+          cost: completion.usage.cost,
+          cached_tokens:
+            completion.usage.prompt_tokens_details?.cached_tokens || 0,
+          reasoning_tokens:
+            completion.usage.completion_tokens_details?.reasoning_tokens || 0,
+          timestamp: new Date().toISOString(),
+        });
 
         // Record consumption based on cost
-        if (responseData.usage.cost && responseData.usage.cost > 0) {
-          const description = `type: text, model: ${modifiedBody.model}, total_tokens: ${responseData.usage.total_tokens}`;
+        if (completion.usage.cost && completion.usage.cost > 0) {
+          const description = `type: text, model: ${requestBody.model}, total_tokens: ${completion.usage.total_tokens}`;
 
           serverConsume({
             userId,
-            amount: responseData.usage.cost,
+            amount: completion.usage.cost,
             description,
             transactionType: TransactionType.CONSUME_TEXT,
           }).catch((error) => {
@@ -301,29 +252,38 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Create response headers
-      const responseHeaders = new Headers();
-
-      // Copy all headers from OpenRouter response
-      openrouterResponse.headers.forEach((value, key) => {
-        responseHeaders.set(key, value);
-      });
-
-      // Add CORS headers
-      responseHeaders.set("Access-Control-Allow-Origin", "*");
-      responseHeaders.set("Access-Control-Allow-Methods", "POST, OPTIONS");
-      responseHeaders.set(
-        "Access-Control-Allow-Headers",
-        "Content-Type, Authorization, X-Title",
-      );
-
-      return new Response(JSON.stringify(responseData), {
-        status: openrouterResponse.status,
-        headers: responseHeaders,
+      return new Response(JSON.stringify(completion), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "POST, OPTIONS",
+          "Access-Control-Allow-Headers":
+            "Content-Type, Authorization, X-Title",
+        },
       });
     }
   } catch (error) {
     console.error("Error in chat completions:", error);
+
+    // Handle OpenAI API errors specifically
+    if (error instanceof OpenAI.APIError) {
+      return new Response(
+        JSON.stringify({
+          error: error.message,
+          type: error.type,
+          code: error.code,
+        }),
+        {
+          status: error.status || 500,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
+        },
+      );
+    }
+
     return new Response(JSON.stringify({ error: "Internal server error" }), {
       status: 500,
       headers: {
