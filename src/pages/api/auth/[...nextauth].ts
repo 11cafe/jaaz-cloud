@@ -3,8 +3,15 @@ import GithubProvider from "next-auth/providers/github";
 import GoogleProvider from "next-auth/providers/google";
 import { UserInDB } from "@/server/dbTypes";
 import { drizzleDb } from "@/server/db-adapters/PostgresAdapter";
-import { UserSchema } from "@/schema";
-import { eq } from "drizzle-orm";
+import {
+  UserSchema,
+  AccountSchema,
+  TransactionsSchema,
+  TransactionType,
+} from "@/schema";
+import { eq, sql } from "drizzle-orm";
+import { addWithPrecision } from "@/utils/mathUtils";
+import { nanoid } from "nanoid";
 
 let githubClientId;
 let githubClientSecret;
@@ -115,6 +122,44 @@ export const authOptions: AuthOptions = {
           if (!userInDb?.id) {
             console.error("Failed to create user in database", userInDb);
             return false;
+          }
+
+          // 创建新账户，赠送 0.5 美金
+          try {
+            await drizzleDb.transaction(async (trx) => {
+              const rewardAmount = 0.5; // $0.5 USD reward for new users
+              const currentBalance = 0; // New user starts with 0 balance
+              const newBalance = addWithPrecision(currentBalance, rewardAmount);
+
+              // Create account with reward balance
+              await trx.insert(AccountSchema).values({
+                id: userInDb.id,
+                balance: sql`${newBalance}`,
+              });
+
+              // Create reward transaction record
+              const transactionId = nanoid();
+              await trx.insert(TransactionsSchema).values({
+                id: transactionId,
+                author_id: userInDb.id,
+                amount: sql`${rewardAmount}`,
+                previous_balance: sql`${currentBalance}`,
+                after_balance: sql`${newBalance}`,
+                description: "Welcome bonus for new user registration",
+                transaction_type: TransactionType.REWARD,
+                created_at: new Date().toISOString(),
+              });
+
+              console.log(
+                `✅ Created account and reward transaction for new user ${userInDb.id}`,
+              );
+            });
+          } catch (error) {
+            console.error(
+              "Failed to create account and reward for new user:",
+              error,
+            );
+            // Don't fail the sign-in process if reward creation fails
           }
         }
         user.id = userInDb.id.toString();

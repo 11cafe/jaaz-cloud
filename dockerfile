@@ -1,64 +1,32 @@
-FROM node:18-alpine AS base
-
-# Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
-RUN apk add --no-cache git libc6-compat
-
-FROM base AS deps
-
-RUN apk add --no-cache libc6-compat
-
+# 使用 Node.js 18 Alpine 版本作为基础镜像
+FROM node:18-alpine AS runner
 WORKDIR /app
 
-COPY package.json ./
-
-RUN npm install
-
-FROM base AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-
-# Clone the comfyui-fork repository and checkout the dev branch
-RUN git clone --branch dev https://github.com/11cafe/comfyui-online-serverless.git comfyui-fork
-
-COPY . .
-
-# build comfyui-fork workspace-manager ui first
-WORKDIR /app/comfyui-fork/web/extensions/workspace-manager
-RUN npm install
-RUN npm run build
-
-WORKDIR /app
-
-RUN npm run build
-
-FROM base AS runner
-WORKDIR /app
-
-ENV NODE_ENV production
+# 设置生产环境
+ENV NODE_ENV=production
+# 创建系统用户组和用户，用于安全运行应用
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-COPY --from=builder /app/public ./public
+# 复制预构建的应用程序文件（需要先在本地运行 npm run build）
+COPY --chown=nextjs:nodejs .next/standalone ./
+COPY --chown=nextjs:nodejs .next/static ./.next/static
+COPY --chown=nextjs:nodejs public ./public
 
-RUN mkdir .next
-RUN chown nextjs:nodejs .next
+# 复制数据库迁移相关文件（仅用于 drizzle-kit）
+COPY --chown=nextjs:nodejs drizzle ./drizzle
+COPY drizzle.config.ts ./drizzle.config.ts
+COPY src/schema.ts ./src/schema.ts
 
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-
-# Copy the built app and other necessary files from the builder stage
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules/
-COPY --from=builder --chown=nextjs:nodejs /app/drizzle ./drizzle
-COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts
-COPY --from=builder /app/src/schema.ts ./src/schema.ts
-COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts/
-
+# 切换到非特权用户运行应用
 USER nextjs
 
-# Set default environment variables
+# 设置默认环境变量
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
+# 暴露端口
 EXPOSE $PORT
 
-CMD ["sh", "-c", "node ./scripts/setupPgTriggers.js && echo 'Running drizzle migrations...' && npx drizzle-kit migrate && echo 'Starting Next.js application...' && node server.js"]
+# 启动命令：直接启动应用
+CMD ["node", "server.js"]

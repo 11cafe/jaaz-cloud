@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { authenticateRequest } from "@/utils/auth";
+import { validateRechargeAmount } from "@/utils/billingUtil";
 
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
@@ -26,8 +27,11 @@ export default async function handler(
 
   // 验证请求参数：充值金额
   const { amount } = req.body;
-  if (!amount || amount < 1) {
-    res.status(400).json({ error: "Invalid amount. Minimum amount is $1." });
+
+  // 使用统一的金额验证函数
+  const amountValidation = validateRechargeAmount(amount);
+  if (!amountValidation.valid) {
+    res.status(400).json({ error: amountValidation.error });
     return;
   }
 

@@ -1,4 +1,6 @@
 .env
 .git
-.next
+.next/cache
+.next/server
 node_modules
+# Allow .next/standalone and .next/static for Docker deployment

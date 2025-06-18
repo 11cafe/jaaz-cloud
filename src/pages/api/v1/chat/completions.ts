@@ -6,14 +6,30 @@ import {
   checkUserBalance,
   createInsufficientBalanceResponse,
 } from "@/utils/balanceCheck";
+import { applyCors } from "@/utils/corsUtils";
 
 // Allow streaming responses up to 90 seconds
 export const maxDuration = 90;
+
+// Custom CORS config for chat completions
+const chatCorsConfig = {
+  methods: ["POST", "OPTIONS"],
+  origin: "*",
+  credentials: false,
+  optionsSuccessStatus: 200,
+  allowedHeaders: ["Content-Type", "Authorization", "X-Title"],
+};
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
 ) {
+  // Apply CORS configuration
+  const shouldContinue = await applyCors(req, res, chatCorsConfig);
+  if (!shouldContinue) {
+    return; // OPTIONS request was handled
+  }
+
   // Only allow POST requests
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
