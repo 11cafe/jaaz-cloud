@@ -9,7 +9,7 @@ import {
 import { applyCors } from "@/utils/corsUtils";
 
 // Allow streaming responses up to 90 seconds
-export const maxDuration = 90;
+export const maxDuration = 180;
 
 // Custom CORS config for chat completions
 const chatCorsConfig = {
