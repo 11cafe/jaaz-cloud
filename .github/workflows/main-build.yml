@@ -1,0 +1,106 @@
+name: Build and Deploy to EC2
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "npm"
+
+      - name: Cache node modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.npm
+            node_modules
+            .next/cache
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Next.js application
+        run: npm run build
+
+      - name: Build Docker image
+        run: |
+          docker build -f dockerfile -t jaaz-cloud .
+
+      - name: Save Docker image to tar file
+        run: |
+          docker save jaaz-cloud -o jaaz-cloud.tar
+          gzip jaaz-cloud.tar
+
+      - name: Transfer Docker image to EC2
+        uses: appleboy/scp-action@v1.0.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "jaaz-cloud.tar.gz"
+          target: "/tmp/"
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # Ensure we have permission to work in /tmp
+            cd /tmp
+
+            # Check if the file exists and is readable
+            if [ ! -f "jaaz-cloud.tar.gz" ]; then
+              echo "Error: Docker image file not found!"
+              exit 1
+            fi
+
+            # Load the Docker image from tar file
+            echo "Extracting Docker image..."
+            gunzip jaaz-cloud.tar.gz
+
+            echo "Loading Docker image..."
+            docker load -i jaaz-cloud.tar
+
+            # Stop and remove existing container
+            echo "Stopping existing container..."
+            docker stop jaaz-cloud || true
+            docker rm jaaz-cloud || true
+
+            # Run new container
+            echo "Starting new container..."
+            docker run -d \
+              --name jaaz-cloud \
+              --restart unless-stopped \
+              -p 3000:3000 \
+              --env-file /etc/jaaz-config/.env.prod \
+              jaaz-cloud
+
+            # Verify container is running
+            if docker ps | grep -q jaaz-cloud; then
+              echo "Container started successfully!"
+            else
+              echo "Error: Container failed to start!"
+              docker logs jaaz-cloud
+              exit 1
+            fi
+
+            # Clean up
+            echo "Cleaning up temporary files..."
+            rm -f /tmp/jaaz-cloud.tar
+            docker image prune -f
