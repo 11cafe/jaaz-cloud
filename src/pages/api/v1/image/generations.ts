@@ -280,8 +280,6 @@ export default async function handler(
       });
     }
 
-    console.log("OpenAI response:", responseData);
-
     // Check if image generation was successful
     if (responseData.status === "succeeded" || responseData.output) {
       // Calculate cost based on model
