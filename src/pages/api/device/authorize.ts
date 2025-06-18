@@ -16,6 +16,7 @@ import { DeviceAuthRequestSchema, UserSchema } from "@/schema";
 import { eq } from "drizzle-orm";
 import jwt from "jsonwebtoken";
 import { isExpired } from "@/utils/datatimeUtils";
+import { applyCors, deviceAuthCorsConfig } from "@/utils/corsUtils";
 
 const JWT_SECRET = process.env.NEXTAUTH_SECRET || "dev-secret";
 
@@ -23,6 +24,12 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
 ) {
+  // Apply CORS configuration
+  const shouldContinue = await applyCors(req, res, deviceAuthCorsConfig);
+  if (!shouldContinue) {
+    return; // OPTIONS request was handled
+  }
+
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }

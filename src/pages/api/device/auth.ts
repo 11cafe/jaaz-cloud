@@ -18,11 +18,18 @@ import {
   toTimestamp,
   getCurrentUTCTime,
 } from "@/utils/datatimeUtils";
+import { applyCors, deviceAuthCorsConfig } from "@/utils/corsUtils";
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
 ) {
+  // Apply CORS configuration
+  const shouldContinue = await applyCors(req, res, deviceAuthCorsConfig);
+  if (!shouldContinue) {
+    return; // OPTIONS request was handled
+  }
+
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }

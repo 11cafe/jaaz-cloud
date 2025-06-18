@@ -6,10 +6,19 @@ import {
   checkUserBalance,
   createInsufficientBalanceResponse,
 } from "@/utils/balanceCheck";
-import NextCors from "nextjs-cors";
+import { applyCors } from "@/utils/corsUtils";
 
 // Allow longer responses for image generation
 export const maxDuration = 120;
+
+// Custom CORS config for image generation
+const imageCorsConfig = {
+  methods: ["POST", "OPTIONS"],
+  origin: "*",
+  credentials: false,
+  optionsSuccessStatus: 200,
+  allowedHeaders: ["Content-Type", "Authorization"],
+};
 
 // Image generation pricing by model
 const IMAGE_MODEL_PRICING: Record<string, number> = {
@@ -26,18 +35,10 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
 ) {
-
-  await NextCors(req, res, {
-    methods: ["POST", "OPTIONS"],
-    origin: "*",
-    credentials: false,
-    optionsSuccessStatus: 200,
-    allowedHeaders: ["Content-Type", "Authorization"],
-  });
-
-  // Handle preflight requests
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
+  // Apply CORS configuration
+  const shouldContinue = await applyCors(req, res, imageCorsConfig);
+  if (!shouldContinue) {
+    return; // OPTIONS request was handled
   }
 
   // Only allow POST requests
