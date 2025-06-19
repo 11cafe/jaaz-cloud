@@ -9,7 +9,6 @@ export const JAAZ_IMAGE_MODELS = [
   "openai/gpt-image-1",
 ];
 
-
 export const JAAZ_IMAGE_MODELS_INFO = {
   "google/imagen-4": {
     name: "Imagen 4",
@@ -50,5 +49,24 @@ export const JAAZ_IMAGE_MODELS_INFO = {
     name: "GPT Image 1",
     description: "OpenAI",
     price: 0.04,
+  },
+};
+
+export const IMAGE_RATIO_OPTIONS = {
+  "1:1": {
+    label: "正方形 (1:1)",
+  },
+  "3:4": {
+    label: "竖屏 (3:4)",
+  },
+  "4:3": {
+    label: "横屏 (4:3)",
+  },
+
+  "9:16": {
+    label: "长竖屏 (9:16)",
+  },
+  "16:9": {
+    label: "宽屏 (16:9)",
   },
 };

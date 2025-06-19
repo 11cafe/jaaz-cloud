@@ -23,7 +23,7 @@ import {
   IconCheck
 } from "@tabler/icons-react";
 import { useToast } from "@/components/ui/use-toast";
-import { JAAZ_IMAGE_MODELS, JAAZ_IMAGE_MODELS_INFO } from "@/constants";
+import { JAAZ_IMAGE_MODELS, JAAZ_IMAGE_MODELS_INFO, IMAGE_RATIO_OPTIONS } from "@/constants";
 
 // 模型选项 - 从 constants 中动态生成
 const modelOptions = JAAZ_IMAGE_MODELS.map(modelId => ({
@@ -33,12 +33,11 @@ const modelOptions = JAAZ_IMAGE_MODELS.map(modelId => ({
   price: JAAZ_IMAGE_MODELS_INFO[modelId].price,
 }));
 
-// 尺寸选项
-const sizeOptions = [
-  { id: "1:1", name: "正方形", size: "1024x1024" },
-  { id: "3:4", name: "竖屏", size: "768x1024" },
-  { id: "4:3", name: "横屏", size: "1024x768" },
-];
+// 尺寸选项 - 从 constants 中动态生成
+const sizeOptions = Object.entries(IMAGE_RATIO_OPTIONS).map(([id, config]) => ({
+  id,
+  name: (config as { label: string }).label,
+}));
 
 // 生成的图像数据接口
 interface GeneratedImage {
@@ -274,12 +273,7 @@ export default function GeneratePage() {
                         key={size.id}
                         onClick={() => setSelectedSize(size)}
                       >
-                        <Stack>
-                          <span className="text-sm">{size.name}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {size.size}
-                          </span>
-                        </Stack>
+                        <span className="text-sm">{size.name}</span>
                       </DropdownMenuItem>
                     ))}
                   </DropdownMenuContent>

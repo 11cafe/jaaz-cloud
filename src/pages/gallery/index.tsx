@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ImageModal } from "@/components/gallery/ImageModal";
 import { type SharedImage, type Model, type AspectRatio, type SortBy } from "@/types/image";
-import { JAAZ_IMAGE_MODELS, JAAZ_IMAGE_MODELS_INFO } from "@/constants";
+import { JAAZ_IMAGE_MODELS, JAAZ_IMAGE_MODELS_INFO, IMAGE_RATIO_OPTIONS } from "@/constants";
 
 // Filter and sort options
 const modelOptions = [
@@ -34,11 +34,10 @@ const modelOptions = [
 
 const aspectRatioOptions = [
   { value: "all", label: "所有尺寸" },
-  { value: "1:1", label: "正方形 (1:1)" },
-  { value: "3:4", label: "竖屏 (3:4)" },
-  { value: "4:3", label: "横屏 (4:3)" },
-  { value: "16:9", label: "宽屏 (16:9)" },
-  { value: "9:16", label: "长竖屏 (9:16)" }
+  ...Object.entries(IMAGE_RATIO_OPTIONS).map(([value, config]) => ({
+    value,
+    label: (config as { label: string }).label
+  }))
 ];
 
 const sortOptions = [
