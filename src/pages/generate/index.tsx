@@ -20,13 +20,15 @@ import {
   IconBulb,
   IconAlertCircle
 } from "@tabler/icons-react";
+import { JAAZ_IMAGE_MODELS, JAAZ_IMAGE_MODELS_INFO } from "@/constants";
 
-// 模型选项
-const modelOptions = [
-  { id: "openai/gpt-image-1", name: "OpenAI DALL-E", description: "最新AI模型" },
-  { id: "black-forest-labs/flux-1.1-pro", name: "Flux Pro", description: "高质量图像" },
-  { id: "google/imagen-4", name: "Imagen 4", description: "Google AI" },
-];
+// 模型选项 - 从 constants 中动态生成
+const modelOptions = JAAZ_IMAGE_MODELS.map(modelId => ({
+  id: modelId,
+  name: JAAZ_IMAGE_MODELS_INFO[modelId].name,
+  description: JAAZ_IMAGE_MODELS_INFO[modelId].description,
+  price: JAAZ_IMAGE_MODELS_INFO[modelId].price,
+}));
 
 // 尺寸选项
 const sizeOptions = [

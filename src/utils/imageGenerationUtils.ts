@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { JAAZ_IMAGE_MODELS_INFO } from "../constants";
 
 // Image generation parameters interface
 export interface ImageGenerationParams {
@@ -201,28 +202,16 @@ export async function generateImage(
   }
 }
 
-// Image generation pricing by model
-export const IMAGE_MODEL_PRICING: Record<string, number> = {
-  "google/imagen-4": 0.04,
-  "google/imagen-4-ultra": 0.06,
-  "black-forest-labs/flux-1.1-pro": 0.04,
-  "black-forest-labs/flux-kontext-pro": 0.04,
-  "black-forest-labs/flux-kontext-max": 0.08,
-  "recraft-ai/recraft-v3": 0.04,
-  "ideogram-ai/ideogram-v3-balanced": 0.06,
-  "openai/gpt-image-1": 0.04,
-};
-
 /**
  * Get model pricing
  * 获取模型定价
  */
 export function getModelPricing(model: string): number {
-  const cost = IMAGE_MODEL_PRICING[model];
-  if (cost === undefined) {
+  const modelInfo = JAAZ_IMAGE_MODELS_INFO[model];
+  if (!modelInfo) {
     throw new Error(
-      `Unsupported model: ${model}. Supported models: ${Object.keys(IMAGE_MODEL_PRICING).join(", ")}`,
+      `Unsupported model: ${model}. Supported models: ${Object.keys(JAAZ_IMAGE_MODELS_INFO).join(", ")}`,
     );
   }
-  return cost;
+  return modelInfo.price;
 }
