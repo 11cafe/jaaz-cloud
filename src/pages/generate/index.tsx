@@ -133,107 +133,104 @@ export default function GeneratePage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="flex-1 flex flex-col"
+            className="flex-1 flex flex-col space-y-4"
           >
-            <Card className="flex-1 flex flex-col">
-              <CardHeader className="pb-4">
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <IconBulb size={18} />
-                  创作描述
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4 flex-1 flex flex-col">
-                <Textarea
-                  placeholder="详细描述您想要生成的图像..."
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  className="min-h-[160px] flex-1 text-base resize-none"
-                />
-
-                {/* 基础设置 */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">模型</label>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="outline" className="w-full justify-between text-sm">
-                          {selectedModel.name}
-                          <IconChevronDown size={14} />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent>
-                        {modelOptions.map((model) => (
-                          <DropdownMenuItem
-                            key={model.id}
-                            onClick={() => setSelectedModel(model)}
-                          >
-                            <Stack>
-                              <span className="text-sm">{model.name}</span>
-                              <span className="text-xs text-muted-foreground">
-                                {model.description}
-                              </span>
-                            </Stack>
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">尺寸</label>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="outline" className="w-full justify-between text-sm">
-                          {selectedSize.name}
-                          <IconChevronDown size={14} />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent>
-                        {sizeOptions.map((size) => (
-                          <DropdownMenuItem
-                            key={size.id}
-                            onClick={() => setSelectedSize(size)}
-                          >
-                            <Stack>
-                              <span className="text-sm">{size.name}</span>
-                              <span className="text-xs text-muted-foreground">
-                                {size.size}
-                              </span>
-                            </Stack>
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-
-                {/* 错误信息 */}
-                {error && (
-                  <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-md">
-                    <IconAlertCircle size={16} className="text-destructive" />
-                    <span className="text-sm text-destructive">{error}</span>
-                  </div>
+            {/* 输入框和按钮组合 */}
+            <div className="flex flex-col border border-border rounded-lg overflow-hidden flex-1">
+              <Textarea
+                placeholder="详细描述您想要生成的图像..."
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                className="flex-1 text-2xl resize-none border-0 rounded-none focus-visible:ring-0 p-4"
+              />
+              <Button
+                onClick={handleGenerate}
+                disabled={!prompt.trim() || isGenerating}
+                size="lg"
+                className="h-12 text-base font-semibold rounded-none border-t"
+                isLoading={isGenerating}
+              >
+                {isGenerating ? (
+                  "正在生成..."
+                ) : (
+                  <>
+                    <IconSparkles size={18} className="mr-2" />
+                    开始制作
+                  </>
                 )}
+              </Button>
+            </div>
 
-                {/* 生成按钮 */}
-                <Button
-                  onClick={handleGenerate}
-                  disabled={!prompt.trim() || isGenerating}
-                  size="lg"
-                  className="w-full h-11 text-base font-semibold mt-auto"
-                  isLoading={isGenerating}
-                >
-                  {isGenerating ? (
-                    "正在生成..."
-                  ) : (
-                    <>
-                      <IconSparkles size={18} className="mr-2" />
-                      开始创作
-                    </>
-                  )}
-                </Button>
-              </CardContent>
-            </Card>
+            {/* 基础设置 */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="w-full justify-between h-12">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <span className="text-base font-medium text-muted-foreground">模型:</span>
+                        <div className="w-px h-6 bg-border"></div>
+                        <span className="text-base font-medium truncate">{selectedModel.name}</span>
+                      </div>
+                      <IconChevronDown size={16} />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    {modelOptions.map((model) => (
+                      <DropdownMenuItem
+                        key={model.id}
+                        onClick={() => setSelectedModel(model)}
+                      >
+                        <Stack>
+                          <span className="text-sm">{model.name}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {model.description}
+                          </span>
+                        </Stack>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+
+              <div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="w-full justify-between h-12">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <span className="text-base font-medium text-muted-foreground">尺寸:</span>
+                        <div className="w-px h-6 bg-border"></div>
+                        <span className="text-base font-medium truncate">{selectedSize.name}</span>
+                      </div>
+                      <IconChevronDown size={16} />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    {sizeOptions.map((size) => (
+                      <DropdownMenuItem
+                        key={size.id}
+                        onClick={() => setSelectedSize(size)}
+                      >
+                        <Stack>
+                          <span className="text-sm">{size.name}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {size.size}
+                          </span>
+                        </Stack>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+
+            {/* 错误信息 */}
+            {error && (
+              <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-md">
+                <IconAlertCircle size={16} className="text-destructive" />
+                <span className="text-sm text-destructive">{error}</span>
+              </div>
+            )}
           </motion.div>
         </div>
 
