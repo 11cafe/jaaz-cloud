@@ -24,7 +24,7 @@ if (isDev) {
 }
 
 export default defineConfig({
-  schema: "./src/schema.ts",
+  schema: ["./src/schema/index.ts", "./src/schema/image.ts"],
   out: "./drizzle",
   dialect: "postgresql",
   dbCredentials: {
