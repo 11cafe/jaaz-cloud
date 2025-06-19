@@ -19,6 +19,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
+import { ImageModal } from "@/components/gallery/ImageModal";
 import { type SharedImage, type Model, type AspectRatio, type SortBy } from "@/types/image";
 
 // Mock data for gallery images
@@ -194,9 +195,10 @@ const sortOptions = [
 interface ImageCardProps {
   image: SharedImage;
   onLike: (imageId: string) => void;
+  onClick: (image: SharedImage) => void;
 }
 
-const ImageCard: React.FC<ImageCardProps> = ({ image, onLike }) => {
+const ImageCard: React.FC<ImageCardProps> = ({ image, onLike, onClick }) => {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [isLiked, setIsLiked] = useState(image.is_liked);
   const [likeCount, setLikeCount] = useState(image.like_count);
@@ -218,7 +220,10 @@ const ImageCard: React.FC<ImageCardProps> = ({ image, onLike }) => {
       transition={{ duration: 0.4 }}
       className="break-inside-avoid mb-4"
     >
-      <Card className="group hover:shadow-lg transition-all duration-300 cursor-pointer overflow-hidden">
+      <Card
+        className="group hover:shadow-lg transition-all duration-300 cursor-pointer overflow-hidden"
+        onClick={() => onClick(image)}
+      >
         <CardContent className="p-0">
           {/* Image */}
           <div className="relative">
@@ -237,7 +242,7 @@ const ImageCard: React.FC<ImageCardProps> = ({ image, onLike }) => {
             />
 
             {/* Overlay with actions */}
-            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
+            {/* <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
               <div className="flex gap-2">
                 <Button
                   size="sm"
@@ -254,7 +259,7 @@ const ImageCard: React.FC<ImageCardProps> = ({ image, onLike }) => {
                   />
                 </Button>
               </div>
-            </div>
+            </div> */}
 
             {/* Featured badge */}
             {image.is_featured && (
@@ -321,6 +326,8 @@ export default function GalleryPage() {
   const [selectedAspectRatio, setSelectedAspectRatio] = useState<AspectRatio | "all">("all");
   const [sortBy, setSortBy] = useState<SortBy>("latest");
   const [loading, setLoading] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<SharedImage | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Filter and sort images
   const filteredImages = useMemo(() => {
@@ -365,6 +372,16 @@ export default function GalleryPage() {
   const handleLike = (imageId: string) => {
     // Mock API call - in real app this would be an API request
     console.log("Toggling like for image:", imageId);
+  };
+
+  const handleImageClick = (image: SharedImage) => {
+    setSelectedImage(image);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedImage(null);
   };
 
   return (
@@ -486,7 +503,7 @@ export default function GalleryPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.05 }}
           >
-            <ImageCard image={image} onLike={handleLike} />
+            <ImageCard image={image} onLike={handleLike} onClick={handleImageClick} />
           </motion.div>
         ))}
       </motion.div>
@@ -527,6 +544,14 @@ export default function GalleryPage() {
           </Button>
         </motion.div>
       )}
+
+      {/* Image Modal */}
+      <ImageModal
+        image={selectedImage}
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        onLike={handleLike}
+      />
     </div>
   );
 }
