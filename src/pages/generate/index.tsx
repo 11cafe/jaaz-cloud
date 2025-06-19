@@ -18,8 +18,11 @@ import {
   IconSparkles,
   IconPhoto,
   IconBulb,
-  IconAlertCircle
+  IconAlertCircle,
+  IconShare,
+  IconCheck
 } from "@tabler/icons-react";
+import { useToast } from "@/components/ui/use-toast";
 import { JAAZ_IMAGE_MODELS, JAAZ_IMAGE_MODELS_INFO } from "@/constants";
 
 // 模型选项 - 从 constants 中动态生成
@@ -51,6 +54,9 @@ export default function GeneratePage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImage, setGeneratedImage] = useState<GeneratedImage | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isSharing, setIsSharing] = useState(false);
+  const [isShared, setIsShared] = useState(false);
+  const { toast } = useToast();
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
@@ -58,6 +64,7 @@ export default function GeneratePage() {
     setIsGenerating(true);
     setError(null);
     setGeneratedImage(null);
+    setIsShared(false); // Reset share status for new image
 
     try {
       // Call the generate API
@@ -106,6 +113,62 @@ export default function GeneratePage() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const handleShare = async () => {
+    if (!generatedImage || isShared) return;
+
+    setIsSharing(true);
+    setError(null);
+
+    try {
+      // Call the share API
+      const response = await fetch("/api/image/share", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          imageId: generatedImage.id,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 409) {
+          // Image already shared
+          setIsShared(true);
+          toast({
+            title: "提示",
+            description: "该图像已经分享过了",
+            variant: "warning",
+          });
+        } else {
+          throw new Error(data.error || "分享失败");
+        }
+      } else if (data.success) {
+        setIsShared(true);
+        toast({
+          title: "分享成功",
+          description: "您的作品已成功分享到广场！",
+          variant: "success",
+        });
+      } else {
+        throw new Error("分享失败");
+      }
+    } catch (err) {
+      console.error("Share error:", err);
+      const errorMessage = err instanceof Error ? err.message : "分享失败，请重试";
+      setError(errorMessage);
+      toast({
+        title: "分享失败",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSharing(false);
+    }
   };
 
   return (
@@ -283,10 +346,32 @@ export default function GeneratePage() {
                         />
                       </motion.div>
                     </div>
-                    <Button onClick={handleDownload} className="w-full">
-                      <IconDownload size={16} className="mr-2" />
-                      下载图像
-                    </Button>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Button onClick={handleDownload} className="w-full">
+                        <IconDownload size={16} className="mr-2" />
+                        下载图像
+                      </Button>
+                      <Button
+                        onClick={handleShare}
+                        disabled={isSharing || isShared}
+                        className="w-full"
+                        isLoading={isSharing}
+                      >
+                        {isShared ? (
+                          <>
+                            <IconCheck size={16} className="mr-2" />
+                            已分享
+                          </>
+                        ) : isSharing ? (
+                          "分享中..."
+                        ) : (
+                          <>
+                            <IconShare size={16} className="mr-2" />
+                            分享到广场
+                          </>
+                        )}
+                      </Button>
+                    </div>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center flex-1 space-y-4 text-center">
