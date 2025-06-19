@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { motion } from "framer-motion";
 import {
   IconSearch,
@@ -21,160 +21,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ImageModal } from "@/components/gallery/ImageModal";
 import { type SharedImage, type Model, type AspectRatio, type SortBy } from "@/types/image";
-
-// Mock data for gallery images
-const mockImages: SharedImage[] = [
-  {
-    id: "1",
-    user_id: 1,
-    user_name: "DynamicWang",
-    user_avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=32&h=32&fit=crop&crop=face&auto=format",
-    prompt: "Vintage car poster with retro design",
-    aspect_ratio: "3:4",
-    model: "flux-kontext",
-    image_url: "https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?w=400&auto=format",
-    shared_at: "2024-01-15T10:30:00Z",
-    view_count: 1250,
-    like_count: 89,
-    is_liked: false,
-    is_featured: true,
-    status: "active",
-    created_at: "2024-01-15T10:30:00Z",
-    updated_at: "2024-01-15T10:30:00Z"
-  },
-  {
-    id: "2",
-    user_id: 2,
-    user_name: "Pinkielicious",
-    user_avatar: "https://images.unsplash.com/photo-1494790108755-2616b612b176?w=32&h=32&fit=crop&crop=face&auto=format",
-    prompt: "Soft collision thematic poster design",
-    aspect_ratio: "1:1",
-    model: "gpt-4o",
-    image_url: "https://images.unsplash.com/photo-1558618047-3c8c76ca7d13?w=400&auto=format",
-    shared_at: "2024-01-14T15:20:00Z",
-    view_count: 892,
-    like_count: 156,
-    is_liked: true,
-    is_featured: false,
-    status: "active",
-    created_at: "2024-01-14T15:20:00Z",
-    updated_at: "2024-01-14T15:20:00Z"
-  },
-  {
-    id: "3",
-    user_id: 3,
-    user_name: "YeahYeah",
-    user_avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=32&h=32&fit=crop&crop=face&auto=format",
-    prompt: "Surreal photography poster with artistic elements",
-    aspect_ratio: "4:3",
-    model: "flux-kontext",
-    image_url: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&auto=format",
-    shared_at: "2024-01-13T09:45:00Z",
-    view_count: 2103,
-    like_count: 234,
-    is_liked: false,
-    is_featured: true,
-    status: "active",
-    created_at: "2024-01-13T09:45:00Z",
-    updated_at: "2024-01-13T09:45:00Z"
-  },
-  {
-    id: "4",
-    user_id: 4,
-    user_name: "Zeng",
-    user_avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=32&h=32&fit=crop&crop=face&auto=format",
-    prompt: "Duckling products branding design",
-    aspect_ratio: "1:1",
-    model: "gpt-4o",
-    image_url: "https://images.unsplash.com/photo-1586953208448-b95a79798f07?w=400&auto=format",
-    shared_at: "2024-01-12T14:15:00Z",
-    view_count: 756,
-    like_count: 67,
-    is_liked: false,
-    is_featured: false,
-    status: "active",
-    created_at: "2024-01-12T14:15:00Z",
-    updated_at: "2024-01-12T14:15:00Z"
-  },
-  {
-    id: "5",
-    user_id: 5,
-    user_name: "wuyuan song",
-    user_avatar: "https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=32&h=32&fit=crop&crop=face&auto=format",
-    prompt: "Vehicle design draft concept art",
-    aspect_ratio: "16:9",
-    model: "flux-kontext",
-    image_url: "https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=400&auto=format",
-    shared_at: "2024-01-11T11:30:00Z",
-    view_count: 1456,
-    like_count: 198,
-    is_liked: true,
-    is_featured: false,
-    status: "active",
-    created_at: "2024-01-11T11:30:00Z",
-    updated_at: "2024-01-11T11:30:00Z"
-  },
-  {
-    id: "6",
-    user_id: 6,
-    user_name: "Jim Chen",
-    user_avatar: "https://images.unsplash.com/photo-1527980965255-d3b416303d12?w=32&h=32&fit=crop&crop=face&auto=format",
-    prompt: "Game character design concept",
-    aspect_ratio: "3:4",
-    model: "gpt-4o",
-    image_url: "https://images.unsplash.com/photo-1552820728-8b83bb6b773f?w=400&auto=format",
-    shared_at: "2024-01-10T16:45:00Z",
-    view_count: 987,
-    like_count: 143,
-    is_liked: false,
-    is_featured: false,
-    status: "active",
-    created_at: "2024-01-10T16:45:00Z",
-    updated_at: "2024-01-10T16:45:00Z"
-  },
-  {
-    id: "7",
-    user_id: 7,
-    user_name: "YeahYeah",
-    user_avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=32&h=32&fit=crop&crop=face&auto=format",
-    prompt: "Graffiti street posters design",
-    aspect_ratio: "1:1",
-    model: "flux-kontext",
-    image_url: "https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=400&auto=format",
-    shared_at: "2024-01-09T13:20:00Z",
-    view_count: 2234,
-    like_count: 312,
-    is_liked: true,
-    is_featured: true,
-    status: "active",
-    created_at: "2024-01-09T13:20:00Z",
-    updated_at: "2024-01-09T13:20:00Z"
-  },
-  {
-    id: "8",
-    user_id: 8,
-    user_name: "DynamicWang",
-    user_avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=32&h=32&fit=crop&crop=face&auto=format",
-    prompt: "Model shots photography",
-    aspect_ratio: "3:4",
-    model: "gpt-4o",
-    image_url: "https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?w=400&auto=format",
-    shared_at: "2024-01-08T10:10:00Z",
-    view_count: 1789,
-    like_count: 267,
-    is_liked: false,
-    is_featured: false,
-    status: "active",
-    created_at: "2024-01-08T10:10:00Z",
-    updated_at: "2024-01-08T10:10:00Z"
-  }
-];
+import { JAAZ_IMAGE_MODELS, JAAZ_IMAGE_MODELS_INFO } from "@/constants";
 
 // Filter and sort options
 const modelOptions = [
   { value: "all", label: "所有模型" },
-  { value: "flux-kontext", label: "Flux Kontext" },
-  { value: "gpt-4o", label: "GPT-4O" }
+  ...JAAZ_IMAGE_MODELS.map(model => ({
+    value: model,
+    label: JAAZ_IMAGE_MODELS_INFO[model]?.name || model
+  }))
 ];
 
 const aspectRatioOptions = [
@@ -183,7 +38,7 @@ const aspectRatioOptions = [
   { value: "3:4", label: "竖屏 (3:4)" },
   { value: "4:3", label: "横屏 (4:3)" },
   { value: "16:9", label: "宽屏 (16:9)" },
-  { value: "9:16", label: "超长竖屏 (9:16)" }
+  { value: "9:16", label: "长竖屏 (9:16)" }
 ];
 
 const sortOptions = [
@@ -191,6 +46,63 @@ const sortOptions = [
   { value: "popular", label: "最受欢迎" },
   { value: "featured", label: "精选作品" }
 ];
+
+// API response types
+interface ApiSharedImage {
+  shareId: string;
+  imageId: string;
+  view_count: number;
+  like_count: number;
+  is_featured: boolean;
+  shared_at: string;
+  prompt: string;
+  image_data: string; // Base64 encoded
+  image_format: string;
+  aspect_ratio: string;
+  model: string;
+  username: string;
+  user_avatar?: string; // User's profile image URL
+  is_liked: boolean; // Whether current user liked this image
+}
+
+interface ApiResponse {
+  success: boolean;
+  data: ApiSharedImage[];
+  pagination: {
+    page: number;
+    limit: number;
+    hasMore: boolean;
+  };
+}
+
+// Convert API data to SharedImage format
+const convertApiDataToSharedImage = (apiData: ApiSharedImage): SharedImage => {
+  // Convert Base64 to data URL for display
+  const imageUrl = `data:image/${apiData.image_format};base64,${apiData.image_data}`;
+
+  // Use user's actual avatar or generate a placeholder
+  const userAvatar = apiData.user_avatar ||
+    `https://images.unsplash.com/photo-${Math.floor(Math.random() * 1000000000)}?w=32&h=32&fit=crop&crop=face&auto=format`;
+
+  return {
+    id: apiData.shareId,
+    user_id: Math.floor(Math.random() * 1000), // This should come from API when available
+    user_name: apiData.username,
+    user_avatar: userAvatar,
+    prompt: apiData.prompt || "AI Generated Image",
+    aspect_ratio: apiData.aspect_ratio as AspectRatio,
+    model: apiData.model as Model,
+    image_url: imageUrl,
+    shared_at: apiData.shared_at,
+    view_count: apiData.view_count,
+    like_count: apiData.like_count,
+    is_liked: apiData.is_liked,
+    is_featured: apiData.is_featured,
+    status: "active",
+    created_at: apiData.shared_at,
+    updated_at: apiData.shared_at
+  };
+};
 
 interface ImageCardProps {
   image: SharedImage;
@@ -210,7 +122,8 @@ const ImageCard: React.FC<ImageCardProps> = ({ image, onLike, onClick }) => {
   };
 
   const getModelBadgeColor = (model: Model) => {
-    return model === "flux-kontext" ? "default" : "secondary";
+    // Flux 系列模型使用 default 颜色，其他使用 secondary
+    return model.includes("flux") ? "default" : "secondary";
   };
 
   return (
@@ -241,26 +154,6 @@ const ImageCard: React.FC<ImageCardProps> = ({ image, onLike, onClick }) => {
               onLoad={() => setImageLoaded(true)}
             />
 
-            {/* Overlay with actions */}
-            {/* <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleLike();
-                  }}
-                  className="bg-white/90 hover:bg-white text-black"
-                >
-                  <IconHeart
-                    size={16}
-                    className={isLiked ? "fill-red-500 text-red-500" : ""}
-                  />
-                </Button>
-              </div>
-            </div> */}
-
             {/* Featured badge */}
             {image.is_featured && (
               <div className="absolute top-3 left-3">
@@ -274,7 +167,7 @@ const ImageCard: React.FC<ImageCardProps> = ({ image, onLike, onClick }) => {
             {/* Model badge */}
             <div className="absolute top-3 right-3">
               <Badge variant={getModelBadgeColor(image.model)}>
-                {image.model === "flux-kontext" ? "Flux" : "GPT-4O"}
+                {JAAZ_IMAGE_MODELS_INFO[image.model]?.name || image.model}
               </Badge>
             </div>
           </div>
@@ -320,38 +213,95 @@ const ImageCard: React.FC<ImageCardProps> = ({ image, onLike, onClick }) => {
 };
 
 export default function GalleryPage() {
-  const [images, setImages] = useState<SharedImage[]>(mockImages);
+  const [images, setImages] = useState<SharedImage[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedModel, setSelectedModel] = useState<Model | "all">("all");
   const [selectedAspectRatio, setSelectedAspectRatio] = useState<AspectRatio | "all">("all");
   const [sortBy, setSortBy] = useState<SortBy>("latest");
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState<SharedImage | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Filter and sort images
+  // Fetch images from API
+  const fetchImages = useCallback(async (page: number = 1, reset: boolean = false) => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: "20",
+        sort_by: sortBy,
+      });
+
+      // Add search parameter
+      if (searchTerm) {
+        params.append("search", searchTerm);
+      }
+
+      // Add model filter
+      if (selectedModel !== "all") {
+        params.append("model", selectedModel);
+      }
+
+      // Add aspect ratio filter
+      if (selectedAspectRatio !== "all") {
+        params.append("aspect_ratio", selectedAspectRatio);
+      }
+
+      // Add featured filter
+      if (sortBy === "featured") {
+        params.append("featured", "true");
+      }
+
+      const response = await fetch(`/api/image/shared/list?${params}`);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result: ApiResponse = await response.json();
+
+      if (!result.success) {
+        throw new Error("Failed to fetch images");
+      }
+
+      // Convert API data to SharedImage format
+      const convertedImages = result.data.map(convertApiDataToSharedImage);
+
+      if (reset || page === 1) {
+        setImages(convertedImages);
+      } else {
+        setImages(prev => [...prev, ...convertedImages]);
+      }
+
+      setHasMore(result.pagination.hasMore);
+      setCurrentPage(page);
+    } catch (err) {
+      console.error("Error fetching images:", err);
+      setError(err instanceof Error ? err.message : "获取图片失败");
+    } finally {
+      setLoading(false);
+      setInitialLoading(false);
+    }
+  }, [sortBy, searchTerm, selectedModel, selectedAspectRatio]);
+
+  // Initial load
+  useEffect(() => {
+    fetchImages(1, true);
+  }, [fetchImages]);
+
+  // Filter and sort images (client-side for search and filters)
   const filteredImages = useMemo(() => {
+    // Since filtering is now done server-side, we just return the images as-is
+    // Client-side sorting is only needed for consistency within the current page
     let filtered = [...images];
 
-    // Apply search filter
-    if (searchTerm) {
-      filtered = filtered.filter(image =>
-        image.prompt.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        image.user_name?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    // Apply model filter
-    if (selectedModel !== "all") {
-      filtered = filtered.filter(image => image.model === selectedModel);
-    }
-
-    // Apply aspect ratio filter
-    if (selectedAspectRatio !== "all") {
-      filtered = filtered.filter(image => image.aspect_ratio === selectedAspectRatio);
-    }
-
-    // Apply sorting
+    // Apply sorting (client-side sorting for consistency within current page results)
     filtered.sort((a, b) => {
       switch (sortBy) {
         case "popular":
@@ -367,11 +317,53 @@ export default function GalleryPage() {
     });
 
     return filtered;
-  }, [images, searchTerm, selectedModel, selectedAspectRatio, sortBy]);
+  }, [images, sortBy]);
 
-  const handleLike = (imageId: string) => {
-    // Mock API call - in real app this would be an API request
-    console.log("Toggling like for image:", imageId);
+  // Handle filter changes - refetch data when any filter changes
+  useEffect(() => {
+    if (!initialLoading) {
+      // Debounce search input to avoid too many API calls
+      const timeoutId = setTimeout(() => {
+        fetchImages(1, true);
+      }, searchTerm ? 500 : 0); // 500ms debounce for search, immediate for other filters
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [sortBy, searchTerm, selectedModel, selectedAspectRatio, fetchImages, initialLoading]);
+
+  const handleLike = async (imageId: string) => {
+    try {
+      const response = await fetch(`/api/image/like`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageId })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Update the local state to reflect the like change
+        setImages(prevImages =>
+          prevImages.map(img =>
+            img.id === imageId
+              ? {
+                ...img,
+                is_liked: result.is_liked,
+                like_count: result.like_count
+              }
+              : img
+          )
+        );
+      } else {
+        console.error("Like operation failed:", result.error);
+      }
+    } catch (err) {
+      console.error("Error toggling like:", err);
+    }
   };
 
   const handleImageClick = (image: SharedImage) => {
@@ -382,6 +374,12 @@ export default function GalleryPage() {
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setSelectedImage(null);
+  };
+
+  const handleLoadMore = () => {
+    if (!loading && hasMore) {
+      fetchImages(currentPage + 1, false);
+    }
   };
 
   return (
@@ -408,108 +406,123 @@ export default function GalleryPage() {
         transition={{ delay: 0.1 }}
         className="mb-8"
       >
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex flex-col md:flex-row gap-4">
-              {/* Search */}
-              <div className="flex-1">
-                <div className="relative">
-                  <IconSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={16} />
-                  <input
-                    type="text"
-                    placeholder="搜索作品或创作者..."
-                    className="w-full pl-10 pr-4 py-2 border rounded-md bg-background text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </div>
-              </div>
+        <div className="flex justify-end gap-4">
+          {/* Model Filter */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="gap-2">
+                <IconFilter size={16} />
+                {modelOptions.find(opt => opt.value === selectedModel)?.label}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              {modelOptions.map(option => (
+                <DropdownMenuItem
+                  key={option.value}
+                  onClick={() => setSelectedModel(option.value as Model | "all")}
+                >
+                  {option.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-              {/* Model Filter */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="gap-2">
-                    <IconFilter size={16} />
-                    {modelOptions.find(opt => opt.value === selectedModel)?.label}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent>
-                  {modelOptions.map(option => (
-                    <DropdownMenuItem
-                      key={option.value}
-                      onClick={() => setSelectedModel(option.value as Model | "all")}
-                    >
-                      {option.label}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
+          {/* Aspect Ratio Filter */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="gap-2">
+                <IconPhoto size={16} />
+                {aspectRatioOptions.find(opt => opt.value === selectedAspectRatio)?.label}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              {aspectRatioOptions.map(option => (
+                <DropdownMenuItem
+                  key={option.value}
+                  onClick={() => setSelectedAspectRatio(option.value as AspectRatio | "all")}
+                >
+                  {option.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-              {/* Aspect Ratio Filter */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="gap-2">
-                    <IconPhoto size={16} />
-                    {aspectRatioOptions.find(opt => opt.value === selectedAspectRatio)?.label}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent>
-                  {aspectRatioOptions.map(option => (
-                    <DropdownMenuItem
-                      key={option.value}
-                      onClick={() => setSelectedAspectRatio(option.value as AspectRatio | "all")}
-                    >
-                      {option.label}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              {/* Sort */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="gap-2">
-                    <IconSortDescending size={16} />
-                    {sortOptions.find(opt => opt.value === sortBy)?.label}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent>
-                  {sortOptions.map(option => (
-                    <DropdownMenuItem
-                      key={option.value}
-                      onClick={() => setSortBy(option.value as SortBy)}
-                    >
-                      {option.label}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </CardContent>
-        </Card>
+          {/* Sort */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="gap-2">
+                <IconSortDescending size={16} />
+                {sortOptions.find(opt => opt.value === sortBy)?.label}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              {sortOptions.map(option => (
+                <DropdownMenuItem
+                  key={option.value}
+                  onClick={() => setSortBy(option.value as SortBy)}
+                >
+                  {option.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </motion.div>
+
+      {/* Error state */}
+      {error && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="text-center py-8"
+        >
+          <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 mb-4">
+            <p className="text-destructive">{error}</p>
+          </div>
+          <Button
+            onClick={() => fetchImages(1, true)}
+            disabled={loading}
+          >
+            重试
+          </Button>
+        </motion.div>
+      )}
+
+      {/* Loading state */}
+      {initialLoading && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="text-center py-16"
+        >
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">加载中...</p>
+        </motion.div>
+      )}
 
       {/* Masonry Grid */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.3 }}
-        className="columns-1 md:columns-2 lg:columns-3 xl:columns-4 gap-4"
-      >
-        {filteredImages.map((image, index) => (
-          <motion.div
-            key={image.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.05 }}
-          >
-            <ImageCard image={image} onLike={handleLike} onClick={handleImageClick} />
-          </motion.div>
-        ))}
-      </motion.div>
+      {!initialLoading && !error && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3 }}
+          className="columns-1 md:columns-2 lg:columns-3 xl:columns-4 gap-4"
+        >
+          {filteredImages.map((image, index) => (
+            <motion.div
+              key={image.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.05 }}
+            >
+              <ImageCard image={image} onLike={handleLike} onClick={handleImageClick} />
+            </motion.div>
+          ))}
+        </motion.div>
+      )}
 
       {/* Empty state */}
-      {filteredImages.length === 0 && (
+      {!initialLoading && !error && filteredImages.length === 0 && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -523,8 +536,8 @@ export default function GalleryPage() {
         </motion.div>
       )}
 
-      {/* Load more placeholder */}
-      {filteredImages.length > 0 && (
+      {/* Load more */}
+      {!initialLoading && !error && filteredImages.length > 0 && hasMore && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -534,11 +547,7 @@ export default function GalleryPage() {
           <Button
             variant="outline"
             disabled={loading}
-            onClick={() => {
-              setLoading(true);
-              // Mock loading more images
-              setTimeout(() => setLoading(false), 1000);
-            }}
+            onClick={handleLoadMore}
           >
             {loading ? "加载中..." : "加载更多"}
           </Button>

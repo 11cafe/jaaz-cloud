@@ -4,6 +4,7 @@ import { IconX, IconHeart, IconEye, IconSparkles, IconCalendar } from "@tabler/i
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { type SharedImage } from "@/types/image";
+import { JAAZ_IMAGE_MODELS_INFO } from "@/constants";
 
 interface ImageModalProps {
   image: SharedImage | null;
@@ -24,7 +25,7 @@ export const ImageModal: React.FC<ImageModalProps> = ({
 
   React.useEffect(() => {
     if (image) {
-      setIsLiked(image.is_liked);
+      setIsLiked(image.is_liked ?? false);
       setLikeCount(image.like_count);
       setImageLoaded(false);
     }
@@ -57,7 +58,8 @@ export const ImageModal: React.FC<ImageModalProps> = ({
   };
 
   const getModelBadgeColor = (model: string) => {
-    return model === "flux-kontext" ? "default" : "secondary";
+    // Flux 系列模型使用 default 颜色，其他使用 secondary
+    return model.includes("flux") ? "default" : "secondary";
   };
 
   if (!image) return null;
@@ -154,7 +156,7 @@ export const ImageModal: React.FC<ImageModalProps> = ({
                 {/* Model Badge */}
                 <div className="mb-4">
                   <Badge variant={getModelBadgeColor(image.model)} className="text-sm">
-                    {image.model === "flux-kontext" ? "Flux Kontext" : "GPT-4O"}
+                    {JAAZ_IMAGE_MODELS_INFO[image.model]?.name || image.model}
                   </Badge>
                 </div>
 
