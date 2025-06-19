@@ -1,27 +1,4 @@
--- Drop existing image-related tables and their dependencies
-DROP TABLE IF EXISTS "image_generations" CASCADE;
-DROP TABLE IF EXISTS "shared_images" CASCADE;
-DROP TABLE IF EXISTS "image_likes" CASCADE;
-
--- Drop existing enums if they exist
-DROP TYPE IF EXISTS "aspect_ratio" CASCADE;
-DROP TYPE IF EXISTS "model" CASCADE;
-DROP TYPE IF EXISTS "image_status" CASCADE;
-DROP TYPE IF EXISTS "generation_status" CASCADE;
-
--- Create enums
-DO $$ BEGIN
- CREATE TYPE "aspect_ratio" AS ENUM('1:1', '4:3', '3:4', '16:9', '9:16');
-EXCEPTION
- WHEN duplicate_object THEN null;
-END $$;
-
-DO $$ BEGIN
- CREATE TYPE "model" AS ENUM('flux-kontext', 'gpt-4o');
-EXCEPTION
- WHEN duplicate_object THEN null;
-END $$;
-
+-- Create image-related enums
 DO $$ BEGIN
  CREATE TYPE "image_status" AS ENUM('active', 'deleted');
 EXCEPTION
@@ -34,7 +11,7 @@ EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
 
--- Create images table
+-- Create images table with text fields for model and aspect_ratio
 CREATE TABLE IF NOT EXISTS "images" (
 	"id" text PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
@@ -42,8 +19,8 @@ CREATE TABLE IF NOT EXISTS "images" (
 	"image_format" text DEFAULT 'png' NOT NULL,
 	"file_size" integer,
 	"prompt" text,
-	"aspect_ratio" "aspect_ratio",
-	"model" "model",
+	"aspect_ratio" text,
+	"model" text,
 	"generation_params" text,
 	"generation_status" "generation_status" DEFAULT 'completed',
 	"cost" numeric(10, 8),

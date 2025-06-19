@@ -7,7 +7,11 @@ import {
   createInsufficientBalanceResponse,
 } from "@/utils/balanceCheck";
 import { applyCors } from "@/utils/corsUtils";
-import OpenAI from "openai";
+import {
+  generateImage,
+  getModelPricing,
+  ImageGenerationParams,
+} from "@/utils/imageGenerationUtils";
 
 // Allow longer responses for image generation
 export const maxDuration = 120;
@@ -20,106 +24,6 @@ const imageCorsConfig = {
   optionsSuccessStatus: 200,
   allowedHeaders: ["Content-Type", "Authorization"],
 };
-
-// Image generation pricing by model
-const IMAGE_MODEL_PRICING: Record<string, number> = {
-  "google/imagen-4": 0.04,
-  "google/imagen-4-ultra": 0.06,
-  "black-forest-labs/flux-1.1-pro": 0.04,
-  "black-forest-labs/flux-kontext-pro": 0.04,
-  "black-forest-labs/flux-kontext-max": 0.08,
-  "recraft-ai/recraft-v3": 0.04,
-  "ideogram-ai/ideogram-v3-balanced": 0.06,
-  "openai/gpt-image-1": 0.04,
-};
-
-// Function to handle OpenAI image generation
-async function generateImageWithOpenAI(
-  prompt: string,
-  model: string,
-  size?: string,
-  quality?: string,
-  outputFormat?: string,
-  outputCompression?: number,
-  background?: string,
-  inputImages?: File[],
-  mask?: File,
-): Promise<any> {
-  const openaiApiKey = process.env.OPENAI_API_KEY;
-
-  if (!openaiApiKey) {
-    throw new Error("OpenAI API key is not configured");
-  }
-
-  const client = new OpenAI({
-    apiKey: openaiApiKey,
-  });
-
-  // Remove the 'openai/' prefix from model name
-  const cleanModel = model.replace("openai/", "");
-
-  // Use user provided size or default to auto
-  const imageSize = size || "auto";
-
-  try {
-    if (inputImages && inputImages.length > 0) {
-      // Image editing mode
-      const editParams: any = {
-        model: cleanModel,
-        image: inputImages.length === 1 ? inputImages[0] : inputImages,
-        prompt: prompt,
-      };
-
-      // Add optional parameters
-      if (size && size !== "auto") editParams.size = imageSize as any;
-      if (quality) editParams.quality = quality;
-      if (outputFormat) editParams.output_format = outputFormat;
-      if (outputCompression !== undefined)
-        editParams.output_compression = outputCompression;
-      if (background) editParams.background = background;
-      if (mask) editParams.mask = mask;
-
-      const response = await client.images.edit(editParams);
-
-      if (!response.data || !response.data[0]) {
-        throw new Error("No image data received from OpenAI");
-      }
-
-      return {
-        status: "succeeded",
-        ...response,
-      };
-    } else {
-      // Image generation mode
-      const generateParams: any = {
-        model: cleanModel,
-        prompt: prompt,
-      };
-
-      // Add optional parameters
-      if (size && size !== "auto") generateParams.size = imageSize as any;
-      if (quality) generateParams.quality = quality;
-      if (outputFormat) generateParams.output_format = outputFormat;
-      if (outputCompression !== undefined)
-        generateParams.output_compression = outputCompression;
-      if (background) generateParams.background = background;
-
-      const response = await client.images.generate(generateParams);
-
-      if (!response.data || !response.data[0]) {
-        throw new Error("No image data received from OpenAI");
-      }
-
-      return {
-        status: "succeeded",
-        ...response,
-      };
-    }
-  } catch (error) {
-    console.error("OpenAI image generation error:", error);
-    throw error;
-  }
-}
 
 export default async function handler(
   req: NextApiRequest,
@@ -182,12 +86,17 @@ export default async function handler(
       });
     }
 
-    // Check if model is supported
-    const modelCost = IMAGE_MODEL_PRICING[model];
-    if (modelCost === undefined) {
+    // Check if model is supported and get pricing
+    let modelCost: number;
+    try {
+      modelCost = getModelPricing(model);
+    } catch (error) {
       console.error(`Unsupported model: ${model}`);
       return res.status(400).json({
-        error: `Unsupported model: ${model}. Supported models: ${Object.keys(IMAGE_MODEL_PRICING).join(", ")}`,
+        error:
+          error instanceof Error
+            ? error.message
+            : `Unsupported model: ${model}`,
       });
     }
 
@@ -196,101 +105,31 @@ export default async function handler(
       `Image generation request from user: ${username} (ID: ${userId}), model: ${model}, prompt: "${prompt.substring(0, 50)}..."`,
     );
 
-    let responseData: any;
-    const isOpenAIModel = model.startsWith("openai/");
+    // Prepare generation parameters
+    const generationParams: ImageGenerationParams = {
+      prompt,
+      model,
+      size,
+      quality,
+      outputFormat: output_format,
+      outputCompression: output_compression,
+      background,
+      aspectRatio: aspect_ratio,
+      inputImages: input_images || (input_image ? [input_image] : undefined),
+      mask,
+    };
 
-    // Check if this is an OpenAI model
-    if (isOpenAIModel) {
-      // Prepare input images (support both single input_image and multiple input_images)
-      const inputImageArray =
-        input_images || (input_image ? [input_image] : undefined);
-
-      // Handle OpenAI image generation
-      responseData = await generateImageWithOpenAI(
-        prompt,
-        model,
-        size,
-        quality,
-        output_format,
-        output_compression,
-        background,
-        inputImageArray,
-        mask,
-      );
-    } else {
-      // Handle Replicate models
-      const replicateApiKey = process.env.REPLICATE_API_KEY;
-
-      if (!replicateApiKey) {
-        console.error("REPLICATE_API_KEY is not set in environment variables");
-        return res
-          .status(500)
-          .json({ error: "Replicate API key is not configured" });
-      }
-
-      // Prepare the Replicate API request
-      const replicateUrl = `https://api.replicate.com/v1/models/${model}/predictions`;
-
-      const headers: Record<string, string> = {
-        Authorization: `Bearer ${replicateApiKey}`,
-        "Content-Type": "application/json",
-        Prefer: "wait",
-      };
-
-      // Prepare input data
-      const inputData: any = {
-        prompt,
-        aspect_ratio: aspect_ratio || "1:1",
-      };
-
-      // Add input image if provided (for image-to-image generation)
-      // Support both single input_image and first image from input_images array
-      const imageForReplicate =
-        input_image || (input_images && input_images[0]);
-      if (imageForReplicate) {
-        inputData.input_image = imageForReplicate;
-      }
-
-      const requestBody = {
-        input: inputData,
-      };
-
-      // Forward request to Replicate
-      const replicateResponse = await fetch(replicateUrl, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(requestBody),
-      });
-
-      // Check if response is successful
-      if (!replicateResponse.ok) {
-        console.error(
-          `Replicate error: ${replicateResponse.status} - ${replicateResponse.statusText}`,
-        );
-        const errorData = await replicateResponse.json();
-        return res.status(replicateResponse.status).json(errorData);
-      }
-
-      // Parse and return the response
-      responseData = await replicateResponse.json();
-
-      // Forward response headers
-      replicateResponse.headers.forEach((value, key) => {
-        res.setHeader(key, value);
-      });
-    }
+    // Generate image using the appropriate service
+    const responseData = await generateImage(generationParams);
 
     // Check if image generation was successful
     if (responseData.status === "succeeded" || responseData.output) {
-      // Calculate cost based on model
-      const cost = modelCost;
-
       // Record consumption for successful image generation
       const description = `type: image, model: ${model}, prompt: "${prompt.substring(0, 40)}${prompt.length > 40 ? "..." : ""}"`;
 
       serverConsume({
         userId,
-        amount: cost,
+        amount: modelCost,
         description,
         transactionType: TransactionType.CONSUME_IMAGE,
       }).catch((error) => {
@@ -305,7 +144,7 @@ export default async function handler(
         id: responseData.id,
         status: responseData.status,
         model: model,
-        cost: cost,
+        cost: modelCost,
         timestamp: new Date().toISOString(),
       });
     }

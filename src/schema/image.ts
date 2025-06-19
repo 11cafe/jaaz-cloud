@@ -21,18 +21,6 @@ export const generationStatusEnum = pgEnum("generation_status", [
   "failed",
 ]);
 
-// Aspect ratio enum
-export const aspectRatioEnum = pgEnum("aspect_ratio", [
-  "1:1",
-  "4:3",
-  "3:4",
-  "16:9",
-  "9:16",
-]);
-
-// Model enum
-export const modelEnum = pgEnum("model", ["flux-kontext", "gpt-4o"]);
-
 // Core images table - stores all images with generation metadata
 export const ImagesSchema = pgTable(
   "images",
@@ -45,8 +33,8 @@ export const ImagesSchema = pgTable(
     image_format: text("image_format").notNull().default("png"), // png, jpg, webp
     file_size: integer("file_size"), // File size in bytes
     prompt: text("prompt"), // Generation prompt (null for uploaded images)
-    aspect_ratio: aspectRatioEnum("aspect_ratio"), // Generation aspect ratio
-    model: modelEnum("model"), // AI model used
+    aspect_ratio: text("aspect_ratio"), // Generation aspect ratio
+    model: text("model"), // AI model used
     generation_params: text("generation_params"), // JSON string
     generation_status:
       generationStatusEnum("generation_status").default("completed"), // Generation status

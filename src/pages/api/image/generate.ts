@@ -11,13 +11,165 @@ import { authOptions } from "@/pages/api/auth/[...nextauth]";
 import { drizzleDb } from "@/server/db-adapters/PostgresAdapter";
 import { ImagesSchema } from "@/schema/image";
 import { nanoid } from "nanoid";
+import {
+  generateImage,
+  getModelPricing,
+  ImageGenerationParams,
+  ImageGenerationResponse,
+} from "@/utils/imageGenerationUtils";
 
 // 图像生成请求的数据结构
 interface GenerateImageRequest {
   prompt: string; // 创作提示词（必填）
-  model?: string; // AI模型选择（可选，默认：dall-e-3）
+  model?: string; // AI模型选择（可选，默认：openai/gpt-image-1）
   aspect_ratio?: string; // 图像宽高比（可选，默认：1:1）
+  size?: string; // 图像尺寸（可选）
+  quality?: string; // 图像质量（可选）
+  output_format?: string; // 输出格式（可选）
+  output_compression?: number; // 压缩比（可选）
+  background?: string; // 背景色（可选）
   generation_params?: any; // 其他生成参数（可选）
+}
+
+/**
+ * 调用共用的图像生成方法
+ */
+async function callImageGenerationAPI(params: {
+  prompt: string;
+  model: string;
+  aspect_ratio?: string;
+  size?: string;
+  quality?: string;
+  output_format?: string;
+  output_compression?: number;
+  background?: string;
+}): Promise<ImageGenerationResponse> {
+  // 准备生成参数
+  const generationParams: ImageGenerationParams = {
+    prompt: params.prompt,
+    model: params.model,
+    aspectRatio: params.aspect_ratio,
+    size: params.size,
+    quality: params.quality,
+    outputFormat: params.output_format,
+    outputCompression: params.output_compression,
+    background: params.background,
+  };
+
+  // 调用共用的图像生成方法
+  return await generateImage(generationParams);
+}
+
+/**
+ * 从生成响应中提取图像数据
+ */
+function extractImageDataFromResponse(responseData: ImageGenerationResponse): {
+  imageUrl?: string;
+  base64?: string;
+  format: string;
+  size: number;
+} {
+  // OpenAI 格式的响应
+  if (responseData.data && responseData.data[0]) {
+    const imageData = responseData.data[0];
+    return {
+      imageUrl: imageData.url,
+      base64: imageData.b64_json,
+      format: "png", // OpenAI 默认格式
+      size: 0, // 无法准确获取，设为0
+    };
+  }
+
+  // Replicate 格式的响应
+  if (responseData.output) {
+    // Replicate 通常返回图像URL
+    const output = Array.isArray(responseData.output)
+      ? responseData.output[0]
+      : responseData.output;
+
+    return {
+      imageUrl: output,
+      format: "png", // 默认格式
+      size: 0, // 无法准确获取，设为0
+    };
+  }
+
+  throw new Error("Unable to extract image data from response");
+}
+
+/**
+ * 下载图像并转换为base64
+ */
+async function downloadImageAsBase64(imageUrl: string): Promise<{
+  base64: string;
+  format: string;
+  size: number;
+}> {
+  try {
+    console.log(`Downloading image from URL: ${imageUrl}`);
+
+    const response = await fetch(imageUrl);
+    if (!response.ok) {
+      throw new Error(
+        `Failed to download image: ${response.status} ${response.statusText}`,
+      );
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    // 获取图像格式
+    const contentType = response.headers.get("content-type") || "image/png";
+    const format = contentType.split("/")[1] || "png";
+
+    // 转换为base64
+    const base64 = buffer.toString("base64");
+
+    console.log(
+      `Image downloaded successfully: ${buffer.length} bytes, format: ${format}`,
+    );
+
+    return {
+      base64,
+      format,
+      size: buffer.length,
+    };
+  } catch (error) {
+    console.error("Error downloading image:", error);
+    throw new Error(
+      `Failed to download image: ${error instanceof Error ? error.message : "Unknown error"}`,
+    );
+  }
+}
+
+/**
+ * 处理图像数据，确保获得base64格式
+ */
+async function processImageData(imageData: {
+  imageUrl?: string;
+  base64?: string;
+  format: string;
+  size: number;
+}): Promise<{
+  base64: string;
+  format: string;
+  size: number;
+}> {
+  // 如果已经有base64数据，直接返回
+  if (imageData.base64) {
+    return {
+      base64: imageData.base64,
+      format: imageData.format,
+      size: imageData.size,
+    };
+  }
+
+  // 如果只有URL，下载并转换为base64
+  if (imageData.imageUrl) {
+    return await downloadImageAsBase64(imageData.imageUrl);
+  }
+
+  throw new Error("No image data or URL available");
 }
 
 /**
@@ -43,8 +195,13 @@ export default async function handler(
     // 3. 解析请求参数
     const {
       prompt,
-      model = "dall-e-3",
+      model = "openai/gpt-image-1", // 默认使用 OpenAI 模型
       aspect_ratio = "1:1",
+      size,
+      quality,
+      output_format,
+      output_compression,
+      background,
       generation_params,
     } = req.body as GenerateImageRequest;
 
@@ -53,24 +210,63 @@ export default async function handler(
       return res.status(400).json({ error: "Prompt is required" });
     }
 
-    // 5. 生成AI图像
-    // TODO: 这里需要集成真实的AI图像生成服务（如OpenAI DALL-E、Midjourney等）
-    // 目前使用占位图像进行演示
-    const placeholderImage = await generatePlaceholderImage();
+    // 5. 验证模型是否支持并获取定价
+    let cost: number;
+    try {
+      cost = getModelPricing(model);
+    } catch (error) {
+      return res.status(400).json({
+        error:
+          error instanceof Error
+            ? error.message
+            : `Unsupported model: ${model}`,
+      });
+    }
 
-    // 6. 生成唯一图像ID
+    // 6. 调用共用的图像生成方法
+    console.log(
+      `Calling image generation API for user: ${session.user.name} (ID: ${session.user.id}), model: ${model}`,
+    );
+
+    const generationResponse = await callImageGenerationAPI({
+      prompt,
+      model,
+      aspect_ratio,
+      size,
+      quality,
+      output_format,
+      output_compression,
+      background,
+    });
+
+    // 7. 检查生成是否成功
+    if (
+      generationResponse.status !== "succeeded" &&
+      !generationResponse.output &&
+      !generationResponse.data
+    ) {
+      throw new Error("Image generation failed");
+    }
+
+    // 8. 提取图像数据
+    const rawImageData = extractImageDataFromResponse(generationResponse);
+
+    // 9. 处理图像数据，确保获得base64格式
+    console.log(
+      `Processing image data for user: ${session.user.name} (ID: ${session.user.id})`,
+    );
+    const processedImageData = await processImageData(rawImageData);
+
+    // 10. 生成唯一图像ID
     const imageId = nanoid();
 
-    // 7. 计算生成成本
-    const cost = calculateCost(model, aspect_ratio);
-
-    // 8. 将图像数据存储到数据库
+    // 11. 将图像数据存储到数据库（只存储base64格式）
     await drizzleDb.insert(ImagesSchema).values({
       id: imageId, // 唯一标识
       user_id: session.user.id, // 用户ID
-      image_data: placeholderImage.base64, // Base64编码的图像数据
-      image_format: placeholderImage.format, // 图像格式（png/jpg/webp）
-      file_size: placeholderImage.size, // 文件大小（字节）
+      image_data: processedImageData.base64, // Base64编码的图像数据
+      image_format: processedImageData.format, // 图像格式
+      file_size: processedImageData.size, // 文件大小（字节）
       prompt, // 创作提示词
       aspect_ratio: aspect_ratio as any, // 图像宽高比
       model: model as any, // 使用的AI模型
@@ -82,58 +278,24 @@ export default async function handler(
       status: "active", // 图像状态
     });
 
-    // 9. 返回成功响应
+    // 12. 返回成功响应
     res.status(200).json({
       success: true,
       data: {
         id: imageId, // 图像ID，用于后续查询
-        image_data: placeholderImage.base64, // Base64图像数据，供前端直接显示
+        image_data: processedImageData.base64, // Base64图像数据，供前端直接显示
         cost, // 本次生成的成本
+        file_size: processedImageData.size, // 文件大小
+        format: processedImageData.format, // 图像格式
       },
     });
+
+    console.log(
+      `Image generation completed for user: ${session.user.name} (ID: ${session.user.id}), cost: $${cost}`,
+    );
   } catch (error) {
-    // 10. 错误处理
+    // 13. 错误处理
     console.error("Image generation error:", error);
     res.status(500).json({ error: "Failed to generate image" });
   }
-}
-
-/**
- * 生成占位图像（临时函数）
- * 实际项目中应该替换为真实的AI图像生成逻辑
- *
- * @returns Promise<{base64: string, format: string, size: number}>
- */
-async function generatePlaceholderImage() {
-  // 生成1x1像素的透明PNG作为占位符
-  // 这个Base64字符串代表一个透明的1x1像素PNG图像
-  const base64 =
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
-
-  return {
-    base64, // Base64编码的图像数据
-    format: "png", // 图像格式
-    size: 95, // 文件大小（字节）
-  };
-}
-
-/**
- * 计算图像生成成本
- * 根据不同的AI模型和图像规格计算费用
- *
- * @param model - AI模型名称
- * @param aspectRatio - 图像宽高比
- * @returns number - 生成成本（美元）
- */
-function calculateCost(model: string, aspectRatio: string): number {
-  // 不同模型的基础价格（美元）
-  const baseCosts: Record<string, number> = {
-    "dall-e-3": 0.04, // DALL-E 3
-    "dall-e-2": 0.02, // DALL-E 2
-    midjourney: 0.03, // Midjourney
-    "stable-diffusion": 0.01, // Stable Diffusion
-  };
-
-  // 返回对应模型的价格，如果模型不存在则使用默认价格
-  return baseCosts[model] || 0.02;
 }

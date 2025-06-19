@@ -10,55 +10,100 @@ import {
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import { Stack } from "@/components/ui/Stack";
-import { Flex } from "@/components/ui/Flex";
 import { motion } from "framer-motion";
 import {
   IconWand,
   IconDownload,
-  IconRefresh,
   IconChevronDown,
   IconSparkles,
   IconPhoto,
-  IconBulb
+  IconBulb,
+  IconAlertCircle
 } from "@tabler/icons-react";
 
 // 模型选项
 const modelOptions = [
-  { id: "dall-e-3", name: "DALL-E 3", description: "最新AI模型" },
-  { id: "dall-e-2", name: "DALL-E 2", description: "经典模型" },
-  { id: "midjourney", name: "Midjourney", description: "艺术风格" },
-  { id: "stable-diffusion", name: "Stable Diffusion", description: "开源模型" },
+  { id: "openai/gpt-image-1", name: "OpenAI DALL-E", description: "最新AI模型" },
+  { id: "black-forest-labs/flux-1.1-pro", name: "Flux Pro", description: "高质量图像" },
+  { id: "google/imagen-4", name: "Imagen 4", description: "Google AI" },
 ];
 
 // 尺寸选项
 const sizeOptions = [
-  { id: "square", name: "正方形", size: "1024x1024" },
-  { id: "portrait", name: "竖屏", size: "768x1024" },
-  { id: "landscape", name: "横屏", size: "1024x768" },
+  { id: "1:1", name: "正方形", size: "1024x1024" },
+  { id: "3:4", name: "竖屏", size: "768x1024" },
+  { id: "4:3", name: "横屏", size: "1024x768" },
 ];
+
+// 生成的图像数据接口
+interface GeneratedImage {
+  id: string;
+  base64: string;
+  format: string;
+}
 
 export default function GeneratePage() {
   const [prompt, setPrompt] = useState("");
   const [selectedModel, setSelectedModel] = useState(modelOptions[0]);
   const [selectedSize, setSelectedSize] = useState(sizeOptions[0]);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedImages, setGeneratedImages] = useState<string[]>([]);
+  const [generatedImage, setGeneratedImage] = useState<GeneratedImage | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
 
     setIsGenerating(true);
-    // TODO: 实现实际的图像生成逻辑
-    setTimeout(() => {
+    setError(null);
+    setGeneratedImage(null);
+
+    try {
+      // Call the generate API
+      const response = await fetch("/api/image/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt,
+          model: selectedModel.id,
+          aspect_ratio: selectedSize.id,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Generation failed");
+      }
+
+      if (data.success && data.data) {
+        setGeneratedImage({
+          id: data.data.id,
+          base64: data.data.image_data,
+          format: data.data.format,
+        });
+      } else {
+        throw new Error("No image data received");
+      }
+    } catch (err) {
+      console.error("Generation error:", err);
+      setError(err instanceof Error ? err.message : "生成失败，请重试");
+    } finally {
       setIsGenerating(false);
-      // 模拟生成的图像
-      setGeneratedImages([
-        "https://picsum.photos/512/512?random=1",
-        "https://picsum.photos/512/512?random=2",
-        "https://picsum.photos/512/512?random=3",
-        "https://picsum.photos/512/512?random=4",
-      ]);
-    }, 3000);
+    }
+  };
+
+  const handleDownload = () => {
+    if (!generatedImage) return;
+
+    // Create download link
+    const link = document.createElement("a");
+    link.href = `data:image/${generatedImage.format};base64,${generatedImage.base64}`;
+    link.download = `generated-image-${generatedImage.id}.${generatedImage.format}`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
@@ -160,6 +205,14 @@ export default function GeneratePage() {
                   </div>
                 </div>
 
+                {/* 错误信息 */}
+                {error && (
+                  <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-md">
+                    <IconAlertCircle size={16} className="text-destructive" />
+                    <span className="text-sm text-destructive">{error}</span>
+                  </div>
+                )}
+
                 {/* 生成按钮 */}
                 <Button
                   onClick={handleGenerate}
@@ -195,9 +248,9 @@ export default function GeneratePage() {
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <IconPhoto size={20} />
                   生成结果
-                  {generatedImages.length > 0 && (
+                  {generatedImage && (
                     <Badge variant="secondary" className="ml-2">
-                      {generatedImages.length}
+                      1
                     </Badge>
                   )}
                 </CardTitle>
@@ -216,38 +269,24 @@ export default function GeneratePage() {
                       请稍候，我们正在将您的想象转化为现实
                     </p>
                   </div>
-                ) : generatedImages.length > 0 ? (
+                ) : generatedImage ? (
                   <div className="space-y-4 flex-1 flex flex-col">
-                    <div className="grid grid-cols-2 gap-4 flex-1">
-                      {generatedImages.map((image, index) => (
-                        <motion.div
-                          key={index}
-                          initial={{ opacity: 0, scale: 0.9 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          transition={{ delay: index * 0.1 }}
-                          className="group relative rounded-lg overflow-hidden border"
-                        >
-                          <img
-                            src={image}
-                            alt={`Generated image ${index + 1}`}
-                            className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                          />
-                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                            <div className="flex gap-2">
-                              <Button size="sm" variant="secondary">
-                                <IconDownload size={16} />
-                              </Button>
-                              <Button size="sm" variant="secondary">
-                                <IconRefresh size={16} />
-                              </Button>
-                            </div>
-                          </div>
-                        </motion.div>
-                      ))}
+                    <div className="flex-1 flex items-center justify-center">
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="group relative rounded-lg overflow-hidden border max-w-full max-h-full"
+                      >
+                        <img
+                          src={`data:image/${generatedImage.format};base64,${generatedImage.base64}`}
+                          alt="Generated image"
+                          className="max-w-full max-h-[500px] object-contain"
+                        />
+                      </motion.div>
                     </div>
-                    <Button variant="outline" className="w-full">
+                    <Button onClick={handleDownload} className="w-full">
                       <IconDownload size={16} className="mr-2" />
-                      下载全部
+                      下载图像
                     </Button>
                   </div>
                 ) : (
