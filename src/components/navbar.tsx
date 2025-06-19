@@ -4,10 +4,18 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/router";
 // import BalanceButton from "./balanceButton";
-import { IconKey, IconServerBolt } from "@tabler/icons-react";
+import { IconKey, IconServerBolt, IconWand, IconPhoto } from "@tabler/icons-react";
 import { Badge } from "./ui/badge";
 
 const navigation: Array<{ name: string; href: string; target?: "_blank" }> = [
+  {
+    name: "生成",
+    href: "/generate",
+  },
+  {
+    name: "广场",
+    href: "/gallery",
+  },
   // {
   //   name: "Github",
   //   href: "https://github.com/11cafe/jaaz",
@@ -41,10 +49,13 @@ export default function Navbar() {
               </div>
             </Link>
 
-            <div className="hidden md:flex">
+            <div className="hidden md:flex gap-4">
               {navigation.map((item) => (
                 <Link key={item.name} href={item.href} target={item.target}>
-                  <button className="bg-transparent text-sm">
+                  <button
+                    className={`bg-transparent text-sm px-3 py-2 rounded-md transition-colors hover:bg-accent hover:text-accent-foreground ${curPath === item.href ? "bg-accent text-accent-foreground" : ""
+                      }`}
+                  >
                     {item.name}
                   </button>
                 </Link>
