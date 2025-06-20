@@ -21,7 +21,17 @@ import {
   ImageGenerationParams,
   ImageGenerationResponse,
 } from "@/utils/imageGenerationUtils";
+import { uploadImageToS3 } from "@/utils/s3Utils";
 import { eq } from "drizzle-orm";
+
+// Configure API route to accept larger payloads for image uploads
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: "10mb", // Increase limit to 50MB for image data
+    },
+  },
+};
 
 // 项目生成请求的数据结构
 interface GenerateProjectRequest {
@@ -122,7 +132,7 @@ async function downloadImageAsBase64(imageUrl: string): Promise<{
 }
 
 /**
- * 处理图像数据，确保获得base64格式
+ * 处理图像数据，上传到S3并返回相关信息
  */
 async function processImageData(imageData: {
   imageUrl?: string;
@@ -130,25 +140,38 @@ async function processImageData(imageData: {
   format: string;
   size: number;
 }): Promise<{
+  s3Url: string;
   base64: string;
   format: string;
   size: number;
 }> {
-  // 如果已经有base64数据，直接返回
+  let base64Data: string;
+  let format = imageData.format;
+  let size = imageData.size;
+
+  // 如果已经有base64数据，直接使用
   if (imageData.base64) {
-    return {
-      base64: imageData.base64,
-      format: imageData.format,
-      size: imageData.size,
-    };
+    base64Data = imageData.base64;
   }
-
   // 如果只有URL，下载并转换为base64
-  if (imageData.imageUrl) {
-    return await downloadImageAsBase64(imageData.imageUrl);
+  else if (imageData.imageUrl) {
+    const downloadedData = await downloadImageAsBase64(imageData.imageUrl);
+    base64Data = downloadedData.base64;
+    format = downloadedData.format;
+    size = downloadedData.size;
+  } else {
+    throw new Error("No image data or URL available");
   }
 
-  throw new Error("No image data or URL available");
+  // 上传到S3
+  const s3Url = await uploadImageToS3(base64Data, format);
+
+  return {
+    s3Url,
+    base64: base64Data,
+    format,
+    size,
+  };
 }
 
 /**
@@ -311,10 +334,10 @@ export default async function handler(
       // 11. 提取并处理图像数据
       const rawImageData = extractImageDataFromResponse(generationResponse);
       const processedImageData = await processImageData(rawImageData);
-      const imageUrl = `data:image/${processedImageData.format};base64,${processedImageData.base64}`;
       const metadata = {
         format: processedImageData.format,
         size: processedImageData.size,
+        s3_url: processedImageData.s3Url,
       };
 
       // 12. 创建输出记录
@@ -322,9 +345,9 @@ export default async function handler(
       await drizzleDb.insert(StepOutputsSchema).values({
         id: outputId,
         step_id: stepId,
-        url: imageUrl,
+        url: processedImageData.s3Url, // 使用S3 URL而不是base64
         type: "image",
-        format: rawImageData.format,
+        format: processedImageData.format,
         order: 0,
         metadata: metadata,
       });
@@ -343,19 +366,20 @@ export default async function handler(
         .update(ProjectsSchema)
         .set({
           status: "completed",
-          cover: imageUrl, // 直接存储图片URL作为封面
+          cover: processedImageData.s3Url, // 直接存储S3 URL作为封面
           updated_at: new Date().toISOString(),
         })
         .where(eq(ProjectsSchema.id, projectId));
 
-      // 15. 返回成功响应
+      // 15. 返回成功响应，图片存储到S3，返回base64 url，更快展示
+      const imgBase64Url = `data:image/${processedImageData.format};base64,${processedImageData.base64}`;
       res.status(200).json({
         success: true,
         data: {
           project_id: projectId,
           step_id: stepId,
           output_id: outputId,
-          image_url: imageUrl,
+          image_url: imgBase64Url,
           cost: cost,
           metadata: metadata,
         },
