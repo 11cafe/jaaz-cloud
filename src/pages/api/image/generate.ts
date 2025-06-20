@@ -25,39 +25,11 @@ interface GenerateImageRequest {
   aspect_ratio?: string; // 图像宽高比（可选，默认：1:1）
   size?: string; // 图像尺寸（可选）
   quality?: string; // 图像质量（可选）
+  input_images?: string[]; // 输入图像（可选）
   output_format?: string; // 输出格式（可选）
   output_compression?: number; // 压缩比（可选）
   background?: string; // 背景色（可选）
   generation_params?: any; // 其他生成参数（可选）
-}
-
-/**
- * 调用共用的图像生成方法
- */
-async function callImageGenerationAPI(params: {
-  prompt: string;
-  model: string;
-  aspect_ratio?: string;
-  size?: string;
-  quality?: string;
-  output_format?: string;
-  output_compression?: number;
-  background?: string;
-}): Promise<ImageGenerationResponse> {
-  // 准备生成参数
-  const generationParams: ImageGenerationParams = {
-    prompt: params.prompt,
-    model: params.model,
-    aspectRatio: params.aspect_ratio,
-    size: params.size,
-    quality: params.quality,
-    outputFormat: params.output_format,
-    outputCompression: params.output_compression,
-    background: params.background,
-  };
-
-  // 调用共用的图像生成方法
-  return await generateImage(generationParams);
 }
 
 /**
@@ -197,6 +169,7 @@ export default async function handler(
       prompt,
       model = "openai/gpt-image-1", // 默认使用 OpenAI 模型
       aspect_ratio = "1:1",
+      input_images = [],
       size,
       quality,
       output_format,
@@ -228,16 +201,20 @@ export default async function handler(
       `Calling image generation API for user: ${session.user.name} (ID: ${session.user.id}), model: ${model}`,
     );
 
-    const generationResponse = await callImageGenerationAPI({
-      prompt,
-      model,
-      aspect_ratio,
-      size,
-      quality,
-      output_format,
-      output_compression,
-      background,
-    });
+    const generationParams: ImageGenerationParams = {
+      prompt: prompt,
+      model: model,
+      aspectRatio: aspect_ratio,
+      size: size,
+      inputImages: input_images,
+      quality: quality,
+      outputFormat: output_format,
+      outputCompression: output_compression,
+      background: background,
+    };
+
+    // 调用共用的图像生成方法
+    const generationResponse = await generateImage(generationParams);
 
     // 7. 检查生成是否成功
     if (

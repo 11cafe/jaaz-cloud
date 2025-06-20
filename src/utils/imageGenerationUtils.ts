@@ -11,7 +11,7 @@ export interface ImageGenerationParams {
   outputCompression?: number;
   background?: string;
   aspectRatio?: string;
-  inputImages?: File[];
+  inputImages?: File[] | string[];
   mask?: File;
 }
 
@@ -19,7 +19,7 @@ export interface ImageGenerationParams {
 export interface ImageGenerationResponse {
   status: "succeeded" | "failed";
   data?: any[];
-  output?: any;
+  output?: string[];
   id?: string;
   error?: string;
 }
@@ -112,6 +112,95 @@ export async function generateImageWithOpenAI(
     throw error;
   }
 }
+const WAVESPEED_API_KEY = process.env.WAVESPEED_API_KEY;
+
+export async function generateImageWithWavespeed(
+  params: ImageGenerationParams,
+): Promise<ImageGenerationResponse> {
+  console.log("generateImageWithWavespeed params", params);
+  const wavespeedApiKey = process.env.WAVESPEED_API_KEY;
+  if (!wavespeedApiKey) {
+    throw new Error("Wavespeed API key is not configured");
+  }
+
+  try {
+    const submitResponse = await fetch(
+      `https://api.wavespeed.ai/api/v3/${params.model}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${WAVESPEED_API_KEY}`,
+        },
+        body: JSON.stringify({
+          prompt: params.prompt,
+          images: params.inputImages,
+          guidance_scale: 6.3,
+          safety_tolerance: "2",
+        }),
+      },
+    );
+    console.log(submitResponse);
+
+    if (submitResponse.status !== 200) {
+      console.error("Wavespeed API error:", submitResponse.statusText);
+      throw new Error(
+        `Failed to submit task to Wavespeed API: ${submitResponse.statusText}`,
+      );
+    }
+
+    const submitResult = await submitResponse.json();
+    console.log(submitResult);
+    // Assuming the task submission response has a request_id
+    const requestId = submitResult.data?.id;
+
+    if (!requestId) {
+      throw new Error("Failed to get request_id from submission");
+    }
+
+    const finalResult = await wavespeedPollForResult(requestId);
+    console.log("wavespeed finalResult", finalResult);
+
+    return {
+      status: "succeeded",
+      output: [finalResult],
+    };
+  } catch (error) {
+    console.error("Wavespeed image generation error:", error);
+    throw error;
+  }
+}
+
+async function wavespeedPollForResult(
+  requestId: string,
+  retries = 30,
+  delay = 500,
+) {
+  for (let i = 0; i < retries; i++) {
+    const response = await fetch(
+      `https://api.wavespeed.ai/api/v3/predictions/${requestId}/result`,
+      {
+        headers: {
+          Authorization: `Bearer ${WAVESPEED_API_KEY}`,
+        },
+      },
+    );
+    console.log("polling response", response);
+
+    if (response.status === 200) {
+      const result = await response.json();
+      console.log("polling result", result);
+      // NOTE: The response structure is an assumption based on the polling logic.
+      // You may need to adjust this based on the actual API response.
+      if (!!result?.data?.outputs?.length) {
+        return result.data.outputs[0];
+      }
+    }
+    // Wait for a bit before the next poll.
+    await new Promise((resolve) => setTimeout(resolve, delay));
+  }
+  throw new Error("Polling timed out");
+}
 
 /**
  * Generate image using Replicate API
@@ -140,6 +229,7 @@ export async function generateImageWithReplicate(
     const inputData: any = {
       prompt: params.prompt,
       aspect_ratio: params.aspectRatio || "1:1",
+      input_image: params.inputImages?.[0],
     };
 
     // Add input image if provided (for image-to-image generation)
@@ -194,9 +284,12 @@ export async function generateImage(
   params: ImageGenerationParams,
 ): Promise<ImageGenerationResponse> {
   const isOpenAIModel = params.model.startsWith("openai/");
+  const isWavespeedModel = params.model.startsWith("wavespeed");
 
   if (isOpenAIModel) {
     return await generateImageWithOpenAI(params);
+  } else if (isWavespeedModel) {
+    return await generateImageWithWavespeed(params);
   } else {
     return await generateImageWithReplicate(params);
   }
