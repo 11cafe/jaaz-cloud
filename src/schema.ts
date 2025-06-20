@@ -6,10 +6,12 @@ import {
   TransactionType,
 } from "./schema/index";
 import {
-  ImagesSchema,
-  SharedImagesSchema,
-  ImageLikesSchema,
-} from "./schema/image";
+  ProjectsSchema,
+  StepsSchema,
+  StepOutputsSchema,
+  projectStatusEnum,
+  stepStatusEnum,
+} from "./schema/project";
 
 export {
   TransactionType,
@@ -17,7 +19,9 @@ export {
   DeviceAuthRequestSchema,
   AccountSchema,
   TransactionsSchema,
-  ImagesSchema,
-  SharedImagesSchema,
-  ImageLikesSchema,
+  ProjectsSchema,
+  StepsSchema,
+  StepOutputsSchema,
+  projectStatusEnum,
+  stepStatusEnum,
 };

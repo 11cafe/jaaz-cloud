@@ -17,15 +17,11 @@ import { UserSchema } from "./index";
  * Step parameters 字段的结构
  */
 export interface StepParameters {
-  inputs: string[]; // 输入资源数组
-  model_params?: {
-    // 模型相关参数
-    aspect_ratio?: string; // 宽高比
-    quality?: string; // 质量设置
-    seed?: number; // 随机种子
-    [key: string]: any; // 其他模型参数
-  };
-  [key: string]: any; // 其他扩展参数
+  // 模型相关参数
+  aspect_ratio?: string; // 宽高比
+  quality?: string; // 质量设置
+  seed?: number; // 随机种子
+  [key: string]: any; // 其他模型参数
 }
 
 // Project status enum
@@ -56,8 +52,8 @@ export const ProjectsSchema = pgTable(
       .notNull(),
     title: text("title").notNull(),
     description: text("description"),
-    cover: text("cover"), // 项目封面图URL，用于分享页面的主视觉
-    featured: jsonb("featured"), // 精选内容数组，包含图片、视频等
+    cover: text("cover"), // StepOutput ID，作为项目封面
+    featured: jsonb("featured"), // StepOutput ID 数组，精选内容
     status: projectStatusEnum("status").default("draft").notNull(),
     is_public: boolean("is_public").default(false).notNull(),
     view_count: integer("view_count").default(0).notNull(),
@@ -99,7 +95,8 @@ export const StepsSchema = pgTable(
     step_order: integer("step_order").notNull(), // Order within the project
     prompt: text("prompt"), // Generation prompt
     model: text("model"), // AI model used
-    parameters: jsonb("parameters"), // Generation parameters + inputs as JSON
+    inputs: jsonb("inputs"), // 输入资源数组 (string[])
+    parameters: jsonb("parameters"), // 其他生成参数
     status: stepStatusEnum("status").default("pending").notNull(),
     cost: decimal("cost", { precision: 10, scale: 8 }), // Step cost
     error_message: text("error_message"), // Error details if failed
@@ -151,10 +148,3 @@ export const StepOutputsSchema = pgTable(
     };
   },
 );
-
-// Export schemas
-export const projectSchemas = {
-  projects: ProjectsSchema,
-  steps: StepsSchema,
-  step_outputs: StepOutputsSchema,
-};
