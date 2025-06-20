@@ -17,7 +17,6 @@ import {
   IconChevronDown,
   IconSparkles,
   IconPhoto,
-  IconBulb,
   IconAlertCircle,
   IconShare,
   IconCheck,
@@ -29,6 +28,7 @@ import {
   JAAZ_IMAGE_MODELS_INFO,
   IMAGE_RATIO_OPTIONS,
 } from "@/constants";
+import { XIcon } from "lucide-react";
 
 // 模型选项 - 从 constants 中动态生成
 const modelOptions = JAAZ_IMAGE_MODELS.map((modelId) => ({
@@ -91,6 +91,7 @@ export default function GeneratePage() {
           prompt,
           model: selectedModel.id,
           aspect_ratio: selectedSize.id,
+          input_images: uploadedImages.map((image) => image.url),
         }),
       });
 
@@ -322,6 +323,17 @@ export default function GeneratePage() {
                       alt={image.filename}
                       className="w-full h-full object-cover"
                     />
+                    <Button
+                      size="icon"
+                      className="absolute top-2 right-2 w-5 h-5"
+                      onClick={() => {
+                        setUploadedImages(
+                          uploadedImages.filter((_, i) => i !== index),
+                        );
+                      }}
+                    >
+                      <XIcon className="w-4 h-4" />
+                    </Button>
                   </div>
                 ))}
               </div>
@@ -352,6 +364,11 @@ export default function GeneratePage() {
                     {modelOptions.map((model) => (
                       <DropdownMenuItem
                         key={model.id}
+                        disabled={
+                          uploadedImages.length > 0 &&
+                          !model.id.includes("flux-kontext") &&
+                          !model.id.includes("gpt")
+                        }
                         onClick={() => setSelectedModel(model)}
                       >
                         <Stack>

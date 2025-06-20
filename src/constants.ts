@@ -25,6 +25,11 @@ export const JAAZ_IMAGE_MODELS_INFO = {
     description: "Black Forest Labs",
     price: 0.04,
   },
+  // "wavespeed-ai/flux-kontext-pro/multi": {
+  //   name: "Flux Kontext Pro",
+  //   description: "Black Forest Labs",
+  //   price: 0.04,
+  // },
   "black-forest-labs/flux-kontext-pro": {
     name: "Flux Kontext Pro",
     description: "Black Forest Labs",
