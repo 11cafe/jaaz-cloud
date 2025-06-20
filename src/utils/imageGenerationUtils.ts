@@ -12,7 +12,7 @@ export interface ImageGenerationParams {
   background?: string;
   aspectRatio?: string;
   inputImages?: File[] | string[];
-  mask?: File;
+  mask?: File | string;
 }
 
 // Standardized response interface
@@ -22,6 +22,32 @@ export interface ImageGenerationResponse {
   output?: string[];
   id?: string;
   error?: string;
+}
+
+/**
+ * Convert base64 data URL to File object for OpenAI API
+ * 将base64数据URL转换为OpenAI API所需的File对象
+ */
+function convertBase64ToFile(
+  base64DataUrl: string,
+  filename: string = "image.png",
+): File {
+  // Extract the base64 data part after the comma
+  const base64Data = base64DataUrl.split(",")[1];
+
+  // Convert base64 to binary
+  const binaryString = atob(base64Data);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+
+  // Determine MIME type from data URL
+  const mimeMatch = base64DataUrl.match(/^data:([^;]+);base64,/);
+  const mimeType = mimeMatch ? mimeMatch[1] : "image/png";
+
+  // Create and return File object
+  return new File([bytes], filename, { type: mimeType });
 }
 
 /**
@@ -50,14 +76,49 @@ export async function generateImageWithOpenAI(
   try {
     if (params.inputImages && params.inputImages.length > 0) {
       // Image editing mode
+
+      // Convert input images from base64 data URLs to File objects
+      let imageForEdit: File;
+      if (typeof params.inputImages[0] === "string") {
+        // If it's a base64 data URL, convert it to File
+        if (params.inputImages[0].startsWith("data:image/")) {
+          imageForEdit = convertBase64ToFile(
+            params.inputImages[0],
+            "input_image.png",
+          );
+        } else {
+          throw new Error(
+            "Input image must be a base64 data URL starting with 'data:image/'",
+          );
+        }
+      } else if (params.inputImages[0] instanceof File) {
+        // If it's already a File, use it directly
+        imageForEdit = params.inputImages[0];
+      } else {
+        throw new Error(
+          "Input image must be either a File object or a base64 data URL",
+        );
+      }
+
       const editParams: any = {
         model: cleanModel,
-        image:
-          params.inputImages.length === 1
-            ? params.inputImages[0]
-            : params.inputImages,
+        image: imageForEdit,
         prompt: params.prompt,
       };
+
+      // Handle mask if provided
+      if (params.mask) {
+        if (
+          typeof params.mask === "string" &&
+          params.mask.startsWith("data:image/")
+        ) {
+          editParams.mask = convertBase64ToFile(params.mask, "mask.png");
+        } else if (params.mask instanceof File) {
+          editParams.mask = params.mask;
+        } else {
+          editParams.mask = params.mask; // Assume it's already properly formatted
+        }
+      }
 
       // Add optional parameters
       if (params.size && params.size !== "auto")
@@ -67,7 +128,6 @@ export async function generateImageWithOpenAI(
       if (params.outputCompression !== undefined)
         editParams.output_compression = params.outputCompression;
       if (params.background) editParams.background = params.background;
-      if (params.mask) editParams.mask = params.mask;
 
       const response = await client.images.edit(editParams);
 
@@ -285,6 +345,8 @@ export async function generateImage(
 ): Promise<ImageGenerationResponse> {
   const isOpenAIModel = params.model.startsWith("openai/");
   const isWavespeedModel = params.model.startsWith("wavespeed");
+
+  console.log("generateImage params", params);
 
   if (isOpenAIModel) {
     return await generateImageWithOpenAI(params);
