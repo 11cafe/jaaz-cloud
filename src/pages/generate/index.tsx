@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,7 +7,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuTrigger
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Stack } from "@/components/ui/Stack";
 import { motion } from "framer-motion";
@@ -20,13 +20,18 @@ import {
   IconBulb,
   IconAlertCircle,
   IconShare,
-  IconCheck
+  IconCheck,
+  IconUpload,
 } from "@tabler/icons-react";
 import { useToast } from "@/components/ui/use-toast";
-import { JAAZ_IMAGE_MODELS, JAAZ_IMAGE_MODELS_INFO, IMAGE_RATIO_OPTIONS } from "@/constants";
+import {
+  JAAZ_IMAGE_MODELS,
+  JAAZ_IMAGE_MODELS_INFO,
+  IMAGE_RATIO_OPTIONS,
+} from "@/constants";
 
 // 模型选项 - 从 constants 中动态生成
-const modelOptions = JAAZ_IMAGE_MODELS.map(modelId => ({
+const modelOptions = JAAZ_IMAGE_MODELS.map((modelId) => ({
   id: modelId,
   name: JAAZ_IMAGE_MODELS_INFO[modelId].name,
   description: JAAZ_IMAGE_MODELS_INFO[modelId].description,
@@ -46,16 +51,26 @@ interface GeneratedImage {
   format: string;
 }
 
+interface UploadedImage {
+  url: string;
+  filename: string;
+}
+
 export default function GeneratePage() {
   const [prompt, setPrompt] = useState("");
   const [selectedModel, setSelectedModel] = useState(modelOptions[0]);
   const [selectedSize, setSelectedSize] = useState(sizeOptions[0]);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedImage, setGeneratedImage] = useState<GeneratedImage | null>(null);
+  const [generatedImage, setGeneratedImage] = useState<GeneratedImage | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [isSharing, setIsSharing] = useState(false);
   const [isShared, setIsShared] = useState(false);
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
@@ -158,7 +173,8 @@ export default function GeneratePage() {
       }
     } catch (err) {
       console.error("Share error:", err);
-      const errorMessage = err instanceof Error ? err.message : "分享失败，请重试";
+      const errorMessage =
+        err instanceof Error ? err.message : "分享失败，请重试";
       setError(errorMessage);
       toast({
         title: "分享失败",
@@ -167,6 +183,55 @@ export default function GeneratePage() {
       });
     } finally {
       setIsSharing(false);
+    }
+  };
+
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsUploading(true);
+    setError(null);
+
+    try {
+      const newImagePromises = Array.from(files).map((file) => {
+        return new Promise<UploadedImage>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () =>
+            resolve({ url: reader.result as string, filename: file.name });
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+      });
+
+      const newImages = await Promise.all(newImagePromises);
+      setUploadedImages((prev) => [...prev, ...newImages]);
+      toast({
+        title: "加载成功",
+        description: `${newImages.length}张图片已加载。`,
+        variant: "success",
+      });
+    } catch (err) {
+      console.error("File loading error:", err);
+      const errorMessage = "读取文件失败，请重试";
+      setError(errorMessage);
+      toast({
+        title: "加载失败",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(false);
+      // Reset file input so user can select the same file again
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     }
   };
 
@@ -199,12 +264,33 @@ export default function GeneratePage() {
           >
             {/* 输入框和按钮组合 */}
             <div className="flex flex-col border border-border rounded-lg overflow-hidden flex-1">
-              <Textarea
-                placeholder="详细描述您想要生成的图像..."
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                className="flex-1 text-2xl resize-none border-0 rounded-none focus-visible:ring-0 p-4"
-              />
+              <div className="relative flex-1">
+                <Textarea
+                  placeholder="详细描述您想要生成的图像..."
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  className="flex-1 text-2xl resize-none border-0 rounded-none focus-visible:ring-0 p-4 pr-16 h-full"
+                />
+                <div className="absolute top-4 right-4">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    multiple
+                    accept="image/*"
+                    className="hidden"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleUploadClick}
+                    disabled={isUploading}
+                    isLoading={isUploading}
+                  >
+                    <IconUpload size={24} />
+                  </Button>
+                </div>
+              </div>
               <Button
                 onClick={handleGenerate}
                 disabled={!prompt.trim() || isGenerating}
@@ -223,16 +309,41 @@ export default function GeneratePage() {
               </Button>
             </div>
 
+            {/* Uploaded Images Thumbnails */}
+            {uploadedImages.length > 0 && (
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
+                {uploadedImages.map((image, index) => (
+                  <div
+                    key={index}
+                    className="relative aspect-square rounded-md overflow-hidden border"
+                  >
+                    <img
+                      src={image.url}
+                      alt={image.filename}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* 基础设置 */}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" className="w-full justify-between h-12">
+                    <Button
+                      variant="outline"
+                      className="w-full justify-between h-12"
+                    >
                       <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <span className="text-base font-medium text-muted-foreground">模型:</span>
+                        <span className="text-base font-medium text-muted-foreground">
+                          模型:
+                        </span>
                         <div className="w-px h-6 bg-border"></div>
-                        <span className="text-base font-medium truncate">{selectedModel.name}</span>
+                        <span className="text-base font-medium truncate">
+                          {selectedModel.name}
+                        </span>
                       </div>
                       <IconChevronDown size={16} />
                     </Button>
@@ -258,11 +369,18 @@ export default function GeneratePage() {
               <div>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" className="w-full justify-between h-12">
+                    <Button
+                      variant="outline"
+                      className="w-full justify-between h-12"
+                    >
                       <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <span className="text-base font-medium text-muted-foreground">尺寸:</span>
+                        <span className="text-base font-medium text-muted-foreground">
+                          尺寸:
+                        </span>
                         <div className="w-px h-6 bg-border"></div>
-                        <span className="text-base font-medium truncate">{selectedSize.name}</span>
+                        <span className="text-base font-medium truncate">
+                          {selectedSize.name}
+                        </span>
                       </div>
                       <IconChevronDown size={16} />
                     </Button>
@@ -316,7 +434,11 @@ export default function GeneratePage() {
                   <div className="flex flex-col items-center justify-center flex-1 space-y-4">
                     <motion.div
                       animate={{ rotate: 360 }}
-                      transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                      transition={{
+                        duration: 2,
+                        repeat: Infinity,
+                        ease: "linear",
+                      }}
                     >
                       <IconWand size={48} className="text-primary" />
                     </motion.div>
@@ -372,7 +494,9 @@ export default function GeneratePage() {
                     <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center">
                       <IconPhoto size={28} className="text-muted-foreground" />
                     </div>
-                    <h3 className="text-lg font-medium">准备好开始创作了吗？</h3>
+                    <h3 className="text-lg font-medium">
+                      准备好开始创作了吗？
+                    </h3>
                     <p className="text-muted-foreground max-w-sm">
                       在左侧输入您的创意描述，让 AI 为您生成独特的艺术作品
                     </p>

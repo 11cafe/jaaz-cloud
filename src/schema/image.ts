@@ -29,6 +29,7 @@ export const ImagesSchema = pgTable(
     user_id: integer("user_id")
       .references(() => UserSchema.id)
       .notNull(),
+    shared_id: text("shared_id"), // Shared image id
     image_data: text("image_data").notNull(), // Base64 encoded image
     image_format: text("image_format").notNull().default("png"), // png, jpg, webp
     file_size: integer("file_size"), // File size in bytes
