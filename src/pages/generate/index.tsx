@@ -199,22 +199,60 @@ export default function GeneratePage() {
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
+    // 文件数量限制
+    const maxFiles = 5;
+    const currentCount = uploadedImages.length;
+    const newFilesCount = files.length;
+
+    if (currentCount + newFilesCount > maxFiles) {
+      setError(`最多只能上传${maxFiles}张图片`);
+      toast({
+        title: "上传失败",
+        description: `最多只能上传${maxFiles}张图片，当前已有${currentCount}张`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsUploading(true);
     setError(null);
 
     try {
       const newImagePromises = Array.from(files).map((file) => {
         return new Promise<UploadedImage>((resolve, reject) => {
+
+          // 文件类型检查
+          if (!file.type.startsWith('image/')) {
+            reject(new Error(`文件 "${file.name}" 不是有效的图片格式`));
+            return;
+          }
+
           const reader = new FileReader();
           reader.onload = () =>
             resolve({ url: reader.result as string, filename: file.name });
-          reader.onerror = reject;
+          reader.onerror = () => reject(new Error(`读取文件 "${file.name}" 失败`));
           reader.readAsDataURL(file);
         });
       });
 
       const newImages = await Promise.all(newImagePromises);
       setUploadedImages((prev) => [...prev, ...newImages]);
+
+      // 如果上传了图片，自动切换到支持输入图像的模型
+      if (newImages.length > 0 && uploadedImages.length === 0) {
+        const supportedModel = modelOptions.find(model =>
+          model.id.includes("flux-kontext") || model.id.includes("gpt")
+        );
+        if (supportedModel && !selectedModel.id.includes("flux-kontext") && !selectedModel.id.includes("gpt")) {
+          setSelectedModel(supportedModel);
+          toast({
+            title: "模型已切换",
+            description: `已自动切换到支持图像输入的模型：${supportedModel.name}`,
+            variant: "default",
+          });
+        }
+      }
+
       toast({
         title: "加载成功",
         description: `${newImages.length}张图片已加载。`,
@@ -222,7 +260,7 @@ export default function GeneratePage() {
       });
     } catch (err) {
       console.error("File loading error:", err);
-      const errorMessage = "读取文件失败，请重试";
+      const errorMessage = err instanceof Error ? err.message : "读取文件失败，请重试";
       setError(errorMessage);
       toast({
         title: "加载失败",
@@ -314,30 +352,32 @@ export default function GeneratePage() {
 
             {/* Uploaded Images Thumbnails */}
             {uploadedImages.length > 0 && (
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
-                {uploadedImages.map((image, index) => (
-                  <div
-                    key={index}
-                    className="relative aspect-square rounded-md overflow-hidden border"
-                  >
-                    <img
-                      src={image.url}
-                      alt={image.filename}
-                      className="w-full h-full object-cover"
-                    />
-                    <Button
-                      size="icon"
-                      className="absolute top-2 right-2 w-5 h-5"
-                      onClick={() => {
-                        setUploadedImages(
-                          uploadedImages.filter((_, i) => i !== index),
-                        );
-                      }}
+              <div className="space-y-2">
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
+                  {uploadedImages.map((image, index) => (
+                    <div
+                      key={index}
+                      className="relative aspect-square rounded-md overflow-hidden border"
                     >
-                      <XIcon className="w-4 h-4" />
-                    </Button>
-                  </div>
-                ))}
+                      <img
+                        src={image.url}
+                        alt={image.filename}
+                        className="w-full h-full object-cover"
+                      />
+                      <Button
+                        size="icon"
+                        className="absolute top-2 right-2 w-5 h-5"
+                        onClick={() => {
+                          setUploadedImages(
+                            uploadedImages.filter((_, i) => i !== index),
+                          );
+                        }}
+                      >
+                        <XIcon className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 

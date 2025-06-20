@@ -192,6 +192,43 @@ export default async function handler(
       return res.status(400).json({ error: "Prompt is required" });
     }
 
+    // 4.1 验证输入图像
+    if (input_images && input_images.length > 0) {
+      // 数量限制
+      if (input_images.length > 5) {
+        return res
+          .status(400)
+          .json({ error: "Maximum 5 input images allowed" });
+      }
+
+      // 验证每个图像是否为有效的 base64 data URL
+      for (let i = 0; i < input_images.length; i++) {
+        const imageUrl = input_images[i];
+        if (!imageUrl.startsWith("data:image/")) {
+          return res.status(400).json({
+            error: `Input image ${i + 1} is not a valid image data URL`,
+          });
+        }
+
+        // 检查base64数据大小（约估算，base64比原始数据大约33%）
+        const base64Data = imageUrl.split(",")[1];
+        if (base64Data && base64Data.length > 7000000) {
+          // 约5MB的base64
+          return res.status(400).json({
+            error: `Input image ${i + 1} is too large (max 5MB)`,
+          });
+        }
+      }
+
+      // 验证模型是否支持输入图像
+      if (!model.includes("flux-kontext") && !model.includes("gpt")) {
+        return res.status(400).json({
+          error:
+            "Selected model does not support input images. Please use Flux-Kontext or GPT models.",
+        });
+      }
+    }
+
     // 5. 验证模型是否支持并获取定价
     let cost: number;
     try {
