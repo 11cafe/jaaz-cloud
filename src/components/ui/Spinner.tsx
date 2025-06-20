@@ -22,12 +22,12 @@ const Spinner = forwardRef<HTMLDivElement, SpinnerProps>((props, ref) => {
           fill="none"
           className="absolute animate-spin stroke-white"
           xmlns="http://www.w3.org/2000/svg"
-          stroke-width="2.0"
+          strokeWidth="2.0"
           viewBox="1 0.25 23 23.5"
         >
           <path
             d="M12.5 23c6.075 0 11-4.925 11-11s-4.925-11-11-11-11 4.925-11 11"
-            stroke-linecap="round"
+            strokeLinecap="round"
           ></path>
         </svg>
       </div>
