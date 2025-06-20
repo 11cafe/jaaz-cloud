@@ -47,18 +47,17 @@ const sortOptions = [
 ];
 
 // API response types
-interface ApiSharedImage {
-  shareId: string;
-  imageId: string;
+interface ApiSharedProject {
+  id: string;
+  title: string;
+  description: string;
+  cover: string; // 直接包含图片URL
+  featured: string[]; // 精选图片URL数组
   view_count: number;
   like_count: number;
-  is_featured: boolean;
-  shared_at: string;
-  prompt: string;
-  image_data: string; // Base64 encoded
-  image_format: string;
-  aspect_ratio: string;
-  model: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
   username: string;
   user_avatar?: string; // User's profile image URL
   is_liked: boolean; // Whether current user liked this image
@@ -66,7 +65,7 @@ interface ApiSharedImage {
 
 interface ApiResponse {
   success: boolean;
-  data: ApiSharedImage[];
+  data: ApiSharedProject[];
   pagination: {
     page: number;
     limit: number;
@@ -75,31 +74,33 @@ interface ApiResponse {
 }
 
 // Convert API data to SharedImage format
-const convertApiDataToSharedImage = (apiData: ApiSharedImage): SharedImage => {
-  // Convert Base64 to data URL for display
-  const imageUrl = `data:image/${apiData.image_format};base64,${apiData.image_data}`;
+const convertApiDataToSharedImage = (apiData: ApiSharedProject): SharedImage => {
+  const imageUrl = apiData.cover;
 
   // Use user's actual avatar or generate a placeholder
   const userAvatar = apiData.user_avatar ||
     `https://images.unsplash.com/photo-${Math.floor(Math.random() * 1000000000)}?w=32&h=32&fit=crop&crop=face&auto=format`;
 
+  // 从项目标题或描述中提取提示词，如果没有则使用默认值
+  const prompt = apiData.description || apiData.title || "AI Generated Image";
+
   return {
-    id: apiData.shareId,
+    id: apiData.id,
     user_id: Math.floor(Math.random() * 1000), // This should come from API when available
     user_name: apiData.username,
     user_avatar: userAvatar,
-    prompt: apiData.prompt || "AI Generated Image",
-    aspect_ratio: apiData.aspect_ratio as AspectRatio,
-    model: apiData.model as Model,
+    prompt: prompt,
+    aspect_ratio: "1:1" as AspectRatio, // TODO: 从项目步骤中获取实际宽高比
+    model: "openai/gpt-image-1" as Model, // TODO: 从项目步骤中获取实际模型
     image_url: imageUrl,
-    shared_at: apiData.shared_at,
+    shared_at: apiData.updated_at,
     view_count: apiData.view_count,
     like_count: apiData.like_count,
     is_liked: apiData.is_liked,
-    is_featured: apiData.is_featured,
+    is_featured: apiData.featured && apiData.featured.length > 0, // 如果有精选图片则认为是精选项目
     status: "active",
-    created_at: apiData.shared_at,
-    updated_at: apiData.shared_at
+    created_at: apiData.created_at,
+    updated_at: apiData.updated_at
   };
 };
 
@@ -118,11 +119,6 @@ const ImageCard: React.FC<ImageCardProps> = ({ image, onLike, onClick }) => {
     setIsLiked(!isLiked);
     setLikeCount(prev => isLiked ? prev - 1 : prev + 1);
     onLike(image.id);
-  };
-
-  const getModelBadgeColor = (model: Model) => {
-    // Flux 系列模型使用 default 颜色，其他使用 secondary
-    return model.includes("flux") ? "default" : "secondary";
   };
 
   return (
@@ -165,7 +161,7 @@ const ImageCard: React.FC<ImageCardProps> = ({ image, onLike, onClick }) => {
 
             {/* Model badge */}
             <div className="absolute top-3 right-3">
-              <Badge variant={getModelBadgeColor(image.model)}>
+              <Badge variant={'default'}>
                 {JAAZ_IMAGE_MODELS_INFO[image.model]?.name || image.model}
               </Badge>
             </div>

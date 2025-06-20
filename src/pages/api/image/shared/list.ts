@@ -112,7 +112,7 @@ export default async function handler(
         break;
     }
 
-    // 6. 查询公开项目（包含封面图像URL）
+    // 6. 查询公开项目（直接使用cover字段中的图片URL）
     const sharedProjects = await drizzleDb
       .select({
         // 项目相关信息
@@ -120,6 +120,7 @@ export default async function handler(
         title: ProjectsSchema.title,
         description: ProjectsSchema.description,
         cover: ProjectsSchema.cover,
+        featured: ProjectsSchema.featured,
         view_count: ProjectsSchema.view_count,
         like_count: ProjectsSchema.like_count,
         status: ProjectsSchema.status,
@@ -129,16 +130,9 @@ export default async function handler(
         // 用户相关信息
         username: UserSchema.username,
         user_avatar: UserSchema.image_url,
-
-        // 封面图像URL
-        cover_url: StepOutputsSchema.url,
       })
       .from(ProjectsSchema)
       .innerJoin(UserSchema, eq(ProjectsSchema.user_id, UserSchema.id))
-      .leftJoin(
-        StepOutputsSchema,
-        eq(ProjectsSchema.cover, StepOutputsSchema.id),
-      ) // 左连接获取封面图像URL
       .where(whereClause!)
       .orderBy(...orderBy)
       .limit(limitNum + 1)
@@ -154,6 +148,7 @@ export default async function handler(
       title: item.title,
       description: item.description,
       cover: item.cover,
+      featured: item.featured,
       view_count: item.view_count,
       like_count: item.like_count,
       status: item.status,
@@ -162,7 +157,6 @@ export default async function handler(
       username: item.username,
       user_avatar: item.user_avatar,
       is_liked: false, // TODO: 实现用户点赞状态查询
-      cover_url: item.cover_url, // 直接返回封面图像URL
     }));
 
     // 9. 返回查询结果

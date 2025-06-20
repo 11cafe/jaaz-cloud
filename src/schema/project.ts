@@ -52,8 +52,8 @@ export const ProjectsSchema = pgTable(
       .notNull(),
     title: text("title").notNull(),
     description: text("description"),
-    cover: text("cover"), // StepOutput ID，作为项目封面
-    featured: jsonb("featured"), // StepOutput ID 数组，精选内容
+    cover: text("cover"), // 项目封面图片URL
+    featured: jsonb("featured"), // 精选图片URL数组
     status: projectStatusEnum("status").default("draft").notNull(),
     is_public: boolean("is_public").default(false).notNull(),
     view_count: integer("view_count").default(0).notNull(),

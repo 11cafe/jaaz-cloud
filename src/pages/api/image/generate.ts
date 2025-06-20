@@ -317,28 +317,6 @@ export default async function handler(
         size: processedImageData.size,
       };
 
-      // let imageUrl: string;
-      // let metadata: any = {};
-
-      // if (rawImageData.imageUrl) {
-      //   // 如果有图像URL，直接使用
-      //   imageUrl = rawImageData.imageUrl;
-      //   metadata = {
-      //     format: rawImageData.format,
-      //     size: rawImageData.size,
-      //   };
-      // } else if (rawImageData.base64) {
-      //   // 如果只有base64数据，创建data URL
-      //   imageUrl = `data:image/${rawImageData.format};base64,${rawImageData.base64}`;
-      //   metadata = {
-      //     format: rawImageData.format,
-      //     size: rawImageData.size,
-      //     isBase64: true,
-      //   };
-      // } else {
-      //   throw new Error("No image data available");
-      // }
-
       // 12. 创建输出记录
       const outputId = nanoid();
       await drizzleDb.insert(StepOutputsSchema).values({
@@ -365,7 +343,7 @@ export default async function handler(
         .update(ProjectsSchema)
         .set({
           status: "completed",
-          cover: outputId, // 使用输出ID作为封面
+          cover: imageUrl, // 直接存储图片URL作为封面
           updated_at: new Date().toISOString(),
         })
         .where(eq(ProjectsSchema.id, projectId));

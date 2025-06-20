@@ -38,13 +38,14 @@ export default async function handler(
     const limitNum = parseInt(limit as string); // 每页显示数量
     const offset = (pageNum - 1) * limitNum; // 数据库查询偏移量
 
-    // 4. 从数据库查询用户的项目列表（包含封面图像URL）
+    // 4. 从数据库查询用户的项目列表
     const projects = await drizzleDb
       .select({
         id: ProjectsSchema.id, // 项目ID
         title: ProjectsSchema.title, // 项目标题
         description: ProjectsSchema.description, // 项目描述
-        cover: ProjectsSchema.cover, // 封面输出ID
+        cover: ProjectsSchema.cover, // 封面图片URL
+        featured: ProjectsSchema.featured, // 精选图片URL数组
         status: ProjectsSchema.status, // 项目状态
         is_public: ProjectsSchema.is_public, // 是否公开
         view_count: ProjectsSchema.view_count, // 浏览次数
@@ -52,19 +53,14 @@ export default async function handler(
         total_cost: ProjectsSchema.total_cost, // 总成本
         created_at: ProjectsSchema.created_at, // 创建时间
         updated_at: ProjectsSchema.updated_at, // 更新时间
-        cover_url: StepOutputsSchema.url, // 封面图像URL
       })
       .from(ProjectsSchema)
-      .leftJoin(
-        StepOutputsSchema,
-        eq(ProjectsSchema.cover, StepOutputsSchema.id),
-      ) // 左连接获取封面图像URL
       .where(eq(ProjectsSchema.user_id, session.user.id)) // 只查询当前用户的项目
       .orderBy(desc(ProjectsSchema.created_at)) // 按创建时间倒序排列
       .limit(limitNum) // 限制返回数量
       .offset(offset); // 设置偏移量
 
-    // 5. 返回查询结果
+    // 6. 返回查询结果
     res.status(200).json({
       success: true,
       data: projects,
@@ -75,7 +71,7 @@ export default async function handler(
       },
     });
   } catch (error) {
-    // 6. 错误处理
+    // 7. 错误处理
     console.error("Get user projects error:", error);
     res.status(500).json({ error: "Failed to get projects" });
   }
