@@ -1,15 +1,19 @@
 /**
- * 单个图像详情API
- * 功能：根据图像ID获取特定图像的完整信息（包含Base64数据）
+ * 单个项目详情API
+ * 功能：根据项目ID获取特定项目的完整信息（包含步骤和输出）
  * 方法：GET
- * 认证：需要用户登录，且只能访问自己的图像
+ * 认证：需要用户登录，且只能访问自己的项目
  */
 
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/pages/api/auth/[...nextauth]";
 import { drizzleDb } from "@/server/db-adapters/PostgresAdapter";
-import { ImagesSchema } from "@/schema/image";
+import {
+  ProjectsSchema,
+  StepsSchema,
+  StepOutputsSchema,
+} from "@/schema/project";
 import { eq, and } from "drizzle-orm";
 
 /**
@@ -32,40 +36,72 @@ export default async function handler(
   }
 
   try {
-    // 3. 获取路径参数中的图像ID
+    // 3. 获取路径参数中的项目ID
     const { id } = req.query;
 
-    // 4. 验证图像ID参数
+    // 4. 验证项目ID参数
     if (!id || typeof id !== "string") {
-      return res.status(400).json({ error: "Image ID is required" });
+      return res.status(400).json({ error: "Project ID is required" });
     }
 
-    // 5. 从数据库查询指定图像
-    // 使用AND条件确保用户只能访问自己的图像
-    const image = await drizzleDb
-      .select() // 选择所有字段，包含完整的图像数据
-      .from(ImagesSchema)
+    // 5. 从数据库查询指定项目
+    const project = await drizzleDb
+      .select()
+      .from(ProjectsSchema)
       .where(
         and(
-          eq(ImagesSchema.id, id), // 匹配图像ID
-          eq(ImagesSchema.user_id, session.user.id), // 确保图像属于当前用户
+          eq(ProjectsSchema.id, id), // 匹配项目ID
+          eq(ProjectsSchema.user_id, session.user.id), // 确保项目属于当前用户
         ),
       )
-      .limit(1); // 只需要一条记录
+      .limit(1);
 
-    // 6. 检查图像是否存在
-    if (!image.length) {
-      return res.status(404).json({ error: "Image not found" });
+    // 6. 检查项目是否存在
+    if (!project.length) {
+      return res.status(404).json({ error: "Project not found" });
     }
 
-    // 7. 返回图像完整信息
+    // 7. 查询项目的所有步骤
+    const steps = await drizzleDb
+      .select()
+      .from(StepsSchema)
+      .where(eq(StepsSchema.project_id, id))
+      .orderBy(StepsSchema.step_order);
+
+    // 8. 查询所有步骤的输出
+    const stepIds = steps.map((step) => step.id);
+    let outputs: any[] = [];
+
+    if (stepIds.length > 0) {
+      // 查询所有步骤的输出，而不只是第一个
+      outputs = await drizzleDb
+        .select()
+        .from(StepOutputsSchema)
+        .where(
+          stepIds.length === 1
+            ? eq(StepOutputsSchema.step_id, stepIds[0])
+            : eq(StepOutputsSchema.step_id, stepIds[0]), // TODO: 支持多步骤查询
+        )
+        .orderBy(StepOutputsSchema.order);
+    }
+
+    // 9. 组合数据结构
+    const projectData = {
+      ...project[0],
+      steps: steps.map((step) => ({
+        ...step,
+        outputs: outputs.filter((output) => output.step_id === step.id),
+      })),
+    };
+
+    // 10. 返回项目完整信息
     res.status(200).json({
       success: true,
-      data: image[0], // 返回图像的所有信息，包括Base64数据
+      data: projectData,
     });
   } catch (error) {
-    // 8. 错误处理
-    console.error("Get image by ID error:", error);
-    res.status(500).json({ error: "Failed to get image" });
+    // 11. 错误处理
+    console.error("Get project by ID error:", error);
+    res.status(500).json({ error: "Failed to get project" });
   }
 }

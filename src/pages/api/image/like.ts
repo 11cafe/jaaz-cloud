@@ -1,17 +1,17 @@
 /**
- * 图像点赞API
- * 功能：用户对分享的图像进行点赞或取消点赞
+ * 项目点赞API
+ * 功能：用户对公开项目进行点赞或取消点赞
  * 方法：POST
  * 认证：需要用户登录
+ * 注意：点赞功能尚未完全实现，目前使用console.log代替
  */
 
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/pages/api/auth/[...nextauth]";
 import { drizzleDb } from "@/server/db-adapters/PostgresAdapter";
-import { ImageLikesSchema, SharedImagesSchema } from "@/schema/image";
+import { ProjectsSchema } from "@/schema/project";
 import { eq, and } from "drizzle-orm";
-import { nanoid } from "nanoid";
 
 /**
  * API处理函数
@@ -34,102 +34,89 @@ export default async function handler(
 
   try {
     // 3. 解析请求数据
-    const { imageId } = req.body;
+    const { projectId } = req.body;
 
     // 4. 验证请求参数
-    if (!imageId || typeof imageId !== "string") {
-      return res.status(400).json({ error: "Image ID is required" });
+    if (!projectId || typeof projectId !== "string") {
+      return res.status(400).json({ error: "Project ID is required" });
     }
 
-    // 5. 检查图像是否存在于分享表中
-    const sharedImage = await drizzleDb
-      .select()
-      .from(SharedImagesSchema)
+    // 5. 检查项目是否存在且为公开状态
+    const project = await drizzleDb
+      .select({
+        id: ProjectsSchema.id,
+        like_count: ProjectsSchema.like_count,
+        status: ProjectsSchema.status,
+        is_public: ProjectsSchema.is_public,
+      })
+      .from(ProjectsSchema)
       .where(
         and(
-          eq(SharedImagesSchema.id, imageId),
-          eq(SharedImagesSchema.status, "active"),
+          eq(ProjectsSchema.id, projectId),
+          eq(ProjectsSchema.is_public, true), // 只能对公开项目点赞
         ),
       )
       .limit(1);
 
-    if (!sharedImage.length) {
-      return res.status(404).json({ error: "Shared image not found" });
+    if (!project.length) {
+      return res.status(404).json({ error: "Public project not found" });
     }
 
-    // 6. 检查用户是否已经点赞过该图像
-    const existingLike = await drizzleDb
-      .select()
-      .from(ImageLikesSchema)
-      .where(
-        and(
-          eq(ImageLikesSchema.user_id, session.user.id),
-          eq(ImageLikesSchema.image_id, imageId),
-        ),
-      )
-      .limit(1);
+    // 6. TODO: 检查用户是否已经点赞过该项目
+    // 这里需要创建一个project_likes表来记录用户点赞状态
+    // 暂时用console.log代替实际的数据库操作
+    console.log(
+      `User ${session.user.id} attempting to like/unlike project ${projectId}`,
+    );
+    console.log("TODO: Check if user already liked this project");
 
-    let isLiked: boolean;
-    let newLikeCount: number;
+    // 模拟点赞状态切换
+    const isCurrentlyLiked = false; // TODO: 从数据库查询实际状态
+    const newIsLiked = !isCurrentlyLiked;
+    const currentLikeCount = project[0].like_count;
+    const newLikeCount = newIsLiked
+      ? currentLikeCount + 1
+      : Math.max(0, currentLikeCount - 1);
 
-    if (existingLike.length > 0) {
-      // 7a. 用户已点赞，执行取消点赞操作
-      await drizzleDb
-        .delete(ImageLikesSchema)
-        .where(
-          and(
-            eq(ImageLikesSchema.user_id, session.user.id),
-            eq(ImageLikesSchema.image_id, imageId),
-          ),
-        );
-
-      // 减少分享图像的点赞数
-      const updatedImage = await drizzleDb
-        .update(SharedImagesSchema)
-        .set({
-          like_count: Math.max(0, sharedImage[0].like_count - 1), // 确保不会小于0
-          updated_at: new Date().toISOString(),
-        })
-        .where(eq(SharedImagesSchema.id, imageId))
-        .returning();
-
-      isLiked = false;
-      newLikeCount = updatedImage[0]?.like_count || 0;
+    // 7. TODO: 实际的点赞/取消点赞操作
+    if (newIsLiked) {
+      console.log("TODO: Insert like record into project_likes table");
+      // await drizzleDb.insert(ProjectLikesSchema).values({...});
     } else {
-      // 7b. 用户未点赞，执行点赞操作
-      await drizzleDb.insert(ImageLikesSchema).values({
-        id: nanoid(),
-        user_id: session.user.id,
-        image_id: imageId,
-        created_at: new Date().toISOString(),
-      });
-
-      // 增加分享图像的点赞数
-      const updatedImage = await drizzleDb
-        .update(SharedImagesSchema)
-        .set({
-          like_count: sharedImage[0].like_count + 1,
-          updated_at: new Date().toISOString(),
-        })
-        .where(eq(SharedImagesSchema.id, imageId))
-        .returning();
-
-      isLiked = true;
-      newLikeCount = updatedImage[0]?.like_count || 0;
+      console.log("TODO: Delete like record from project_likes table");
+      // await drizzleDb.delete(ProjectLikesSchema).where(...);
     }
 
-    // 8. 返回操作结果
+    // 8. 更新项目的点赞数
+    console.log(
+      `Updating project ${projectId} like count from ${currentLikeCount} to ${newLikeCount}`,
+    );
+
+    const updatedProject = await drizzleDb
+      .update(ProjectsSchema)
+      .set({
+        like_count: newLikeCount,
+        updated_at: new Date().toISOString(),
+      })
+      .where(eq(ProjectsSchema.id, projectId))
+      .returning();
+
+    // 9. 返回操作结果
     res.status(200).json({
       success: true,
-      is_liked: isLiked,
-      like_count: newLikeCount,
-      message: isLiked
-        ? "Image liked successfully"
-        : "Image unliked successfully",
+      is_liked: newIsLiked,
+      like_count: updatedProject[0]?.like_count || newLikeCount,
+      message: newIsLiked
+        ? "Project liked successfully"
+        : "Project unliked successfully",
     });
+
+    console.log(
+      `Project ${projectId} ${newIsLiked ? "liked" : "unliked"} by user ${session.user.id}`,
+    );
   } catch (error) {
-    // 9. 错误处理
-    console.error("Toggle like error:", error);
+    // 10. 错误处理
+    console.error("Toggle project like error:", error);
     res.status(500).json({
       success: false,
       error: "Failed to toggle like",

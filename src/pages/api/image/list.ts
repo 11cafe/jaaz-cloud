@@ -1,6 +1,6 @@
 /**
- * 用户图像列表API
- * 功能：获取当前用户生成的图像列表（分页）
+ * 用户项目列表API
+ * 功能：获取当前用户创建的项目列表（分页）
  * 方法：GET
  * 认证：需要用户登录
  */
@@ -9,7 +9,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/pages/api/auth/[...nextauth]";
 import { drizzleDb } from "@/server/db-adapters/PostgresAdapter";
-import { ImagesSchema } from "@/schema/image";
+import { ProjectsSchema, StepOutputsSchema } from "@/schema/project";
 import { eq, desc } from "drizzle-orm";
 
 /**
@@ -38,37 +38,45 @@ export default async function handler(
     const limitNum = parseInt(limit as string); // 每页显示数量
     const offset = (pageNum - 1) * limitNum; // 数据库查询偏移量
 
-    // 4. 从数据库查询用户的图像列表
-    // 注意：这里不返回完整的image_data，只返回元数据，提高查询性能
-    const images = await drizzleDb
+    // 4. 从数据库查询用户的项目列表（包含封面图像URL）
+    const projects = await drizzleDb
       .select({
-        id: ImagesSchema.id, // 图像ID
-        prompt: ImagesSchema.prompt, // 创作提示词
-        aspect_ratio: ImagesSchema.aspect_ratio, // 图像宽高比
-        model: ImagesSchema.model, // 使用的AI模型
-        generation_status: ImagesSchema.generation_status, // 生成状态
-        cost: ImagesSchema.cost, // 生成成本
-        created_at: ImagesSchema.created_at, // 创建时间
+        id: ProjectsSchema.id, // 项目ID
+        title: ProjectsSchema.title, // 项目标题
+        description: ProjectsSchema.description, // 项目描述
+        cover: ProjectsSchema.cover, // 封面输出ID
+        status: ProjectsSchema.status, // 项目状态
+        is_public: ProjectsSchema.is_public, // 是否公开
+        view_count: ProjectsSchema.view_count, // 浏览次数
+        like_count: ProjectsSchema.like_count, // 点赞次数
+        total_cost: ProjectsSchema.total_cost, // 总成本
+        created_at: ProjectsSchema.created_at, // 创建时间
+        updated_at: ProjectsSchema.updated_at, // 更新时间
+        cover_url: StepOutputsSchema.url, // 封面图像URL
       })
-      .from(ImagesSchema)
-      .where(eq(ImagesSchema.user_id, session.user.id)) // 只查询当前用户的图像
-      .orderBy(desc(ImagesSchema.created_at)) // 按创建时间倒序排列
+      .from(ProjectsSchema)
+      .leftJoin(
+        StepOutputsSchema,
+        eq(ProjectsSchema.cover, StepOutputsSchema.id),
+      ) // 左连接获取封面图像URL
+      .where(eq(ProjectsSchema.user_id, session.user.id)) // 只查询当前用户的项目
+      .orderBy(desc(ProjectsSchema.created_at)) // 按创建时间倒序排列
       .limit(limitNum) // 限制返回数量
       .offset(offset); // 设置偏移量
 
     // 5. 返回查询结果
     res.status(200).json({
       success: true,
-      data: images,
+      data: projects,
       pagination: {
         page: pageNum, // 当前页码
         limit: limitNum, // 每页数量
-        hasMore: images.length === limitNum, // 是否还有更多数据
+        hasMore: projects.length === limitNum, // 是否还有更多数据
       },
     });
   } catch (error) {
     // 6. 错误处理
-    console.error("Get user images error:", error);
-    res.status(500).json({ error: "Failed to get images" });
+    console.error("Get user projects error:", error);
+    res.status(500).json({ error: "Failed to get projects" });
   }
 }

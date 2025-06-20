@@ -47,7 +47,7 @@ const sizeOptions = Object.entries(IMAGE_RATIO_OPTIONS).map(([id, config]) => ({
 // 生成的图像数据接口
 interface GeneratedImage {
   id: string;
-  base64: string;
+  url: string;
   format: string;
 }
 
@@ -64,6 +64,7 @@ export default function GeneratePage() {
   const [generatedImage, setGeneratedImage] = useState<GeneratedImage | null>(
     null,
   );
+  const [projectId, setProjectId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSharing, setIsSharing] = useState(false);
   const [isShared, setIsShared] = useState(false);
@@ -103,10 +104,11 @@ export default function GeneratePage() {
 
       if (data.success && data.data) {
         setGeneratedImage({
-          id: data.data.id,
-          base64: data.data.image_data,
-          format: data.data.format,
+          id: data.data.output_id,
+          url: data.data.image_url,
+          format: data.data.metadata?.format || 'png'
         });
+        setProjectId(data.data.project_id);
       } else {
         throw new Error("No image data received");
       }
@@ -123,7 +125,7 @@ export default function GeneratePage() {
 
     // Create download link
     const link = document.createElement("a");
-    link.href = `data:image/${generatedImage.format};base64,${generatedImage.base64}`;
+    link.href = generatedImage.url;
     link.download = `generated-image-${generatedImage.id}.${generatedImage.format}`;
     document.body.appendChild(link);
     link.click();
@@ -131,7 +133,7 @@ export default function GeneratePage() {
   };
 
   const handleShare = async () => {
-    if (!generatedImage || isShared) return;
+    if (!projectId || isShared) return;
 
     setIsSharing(true);
     setError(null);
@@ -144,7 +146,7 @@ export default function GeneratePage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          imageId: generatedImage.id,
+          projectId: projectId,
         }),
       });
 
@@ -152,11 +154,11 @@ export default function GeneratePage() {
 
       if (!response.ok) {
         if (response.status === 409) {
-          // Image already shared
+          // Project already shared
           setIsShared(true);
           toast({
             title: "提示",
-            description: "该图像已经分享过了",
+            description: "该项目已经分享过了",
             variant: "warning",
           });
         } else {
@@ -473,7 +475,7 @@ export default function GeneratePage() {
                         className="group relative rounded-lg overflow-hidden border max-w-full max-h-full"
                       >
                         <img
-                          src={`data:image/${generatedImage.format};base64,${generatedImage.base64}`}
+                          src={generatedImage.url}
                           alt="Generated image"
                           className="max-w-full max-h-[500px] object-contain"
                         />

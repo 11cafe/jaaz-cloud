@@ -1,6 +1,6 @@
 /**
- * 图像生成API
- * 功能：接收用户的创作提示词，生成AI图像并存储到数据库
+ * 项目生成API
+ * 功能：接收用户的创作提示词，生成AI项目并存储到数据库
  * 方法：POST
  * 认证：需要用户登录
  */
@@ -9,7 +9,11 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/pages/api/auth/[...nextauth]";
 import { drizzleDb } from "@/server/db-adapters/PostgresAdapter";
-import { ImagesSchema } from "@/schema/image";
+import {
+  ProjectsSchema,
+  StepsSchema,
+  StepOutputsSchema,
+} from "@/schema/project";
 import { nanoid } from "nanoid";
 import {
   generateImage,
@@ -17,12 +21,15 @@ import {
   ImageGenerationParams,
   ImageGenerationResponse,
 } from "@/utils/imageGenerationUtils";
+import { eq } from "drizzle-orm";
 
-// 图像生成请求的数据结构
-interface GenerateImageRequest {
+// 项目生成请求的数据结构
+interface GenerateProjectRequest {
+  title?: string; // 项目标题（可选）
+  description?: string; // 项目描述（可选）
   prompt: string; // 创作提示词（必填）
-  model?: string; // AI模型选择（可选，默认：openai/gpt-image-1）
-  aspect_ratio?: string; // 图像宽高比（可选，默认：1:1）
+  model?: string; // AI模型选择（可选）
+  aspect_ratio?: string; // 图像宽高比（可选）
   size?: string; // 图像尺寸（可选）
   quality?: string; // 图像质量（可选）
   input_images?: string[]; // 输入图像（可选）
@@ -166,6 +173,8 @@ export default async function handler(
   try {
     // 3. 解析请求参数
     const {
+      title = "AI生成项目",
+      description,
       prompt,
       model = "openai/gpt-image-1", // 默认使用 OpenAI 模型
       aspect_ratio = "1:1",
@@ -176,7 +185,7 @@ export default async function handler(
       output_compression,
       background,
       generation_params,
-    } = req.body as GenerateImageRequest;
+    } = req.body as GenerateProjectRequest;
 
     // 4. 验证必填参数
     if (!prompt?.trim()) {
@@ -196,7 +205,43 @@ export default async function handler(
       });
     }
 
-    // 6. 调用共用的图像生成方法
+    // 6. 生成项目ID和步骤ID
+    const projectId = nanoid();
+    const stepId = nanoid();
+
+    // 7. 创建项目记录
+    await drizzleDb.insert(ProjectsSchema).values({
+      id: projectId,
+      user_id: session.user.id,
+      title: title,
+      description: description,
+      status: "active",
+      is_public: false,
+      total_cost: cost.toString(),
+    });
+
+    // 8. 创建步骤记录
+    await drizzleDb.insert(StepsSchema).values({
+      id: stepId,
+      project_id: projectId,
+      step_order: 1,
+      prompt: prompt,
+      model: model,
+      inputs: input_images,
+      parameters: {
+        aspect_ratio,
+        size,
+        quality,
+        output_format,
+        output_compression,
+        background,
+        ...generation_params,
+      },
+      status: "running",
+      cost: cost.toString(),
+    });
+
+    // 9. 调用图像生成API
     console.log(
       `Calling image generation API for user: ${session.user.name} (ID: ${session.user.id}), model: ${model}`,
     );
@@ -213,66 +258,116 @@ export default async function handler(
       background: background,
     };
 
-    // 调用共用的图像生成方法
-    const generationResponse = await generateImage(generationParams);
+    try {
+      // 调用图像生成方法
+      const generationResponse = await generateImage(generationParams);
 
-    // 7. 检查生成是否成功
-    if (
-      generationResponse.status !== "succeeded" &&
-      !generationResponse.output &&
-      !generationResponse.data
-    ) {
-      throw new Error("Image generation failed");
+      // 10. 检查生成是否成功
+      if (
+        generationResponse.status !== "succeeded" &&
+        !generationResponse.output &&
+        !generationResponse.data
+      ) {
+        throw new Error("Image generation failed");
+      }
+
+      // 11. 提取并处理图像数据
+      const rawImageData = extractImageDataFromResponse(generationResponse);
+      const processedImageData = await processImageData(rawImageData);
+      const imageUrl = `data:image/${processedImageData.format};base64,${processedImageData.base64}`;
+      const metadata = {
+        format: processedImageData.format,
+        size: processedImageData.size,
+      };
+
+      // let imageUrl: string;
+      // let metadata: any = {};
+
+      // if (rawImageData.imageUrl) {
+      //   // 如果有图像URL，直接使用
+      //   imageUrl = rawImageData.imageUrl;
+      //   metadata = {
+      //     format: rawImageData.format,
+      //     size: rawImageData.size,
+      //   };
+      // } else if (rawImageData.base64) {
+      //   // 如果只有base64数据，创建data URL
+      //   imageUrl = `data:image/${rawImageData.format};base64,${rawImageData.base64}`;
+      //   metadata = {
+      //     format: rawImageData.format,
+      //     size: rawImageData.size,
+      //     isBase64: true,
+      //   };
+      // } else {
+      //   throw new Error("No image data available");
+      // }
+
+      // 12. 创建输出记录
+      const outputId = nanoid();
+      await drizzleDb.insert(StepOutputsSchema).values({
+        id: outputId,
+        step_id: stepId,
+        url: imageUrl,
+        type: "image",
+        format: rawImageData.format,
+        order: 0,
+        metadata: metadata,
+      });
+
+      // 13. 更新步骤状态为完成
+      await drizzleDb
+        .update(StepsSchema)
+        .set({
+          status: "completed",
+          updated_at: new Date().toISOString(),
+        })
+        .where(eq(StepsSchema.id, stepId));
+
+      // 14. 更新项目状态和封面
+      await drizzleDb
+        .update(ProjectsSchema)
+        .set({
+          status: "completed",
+          cover: outputId, // 使用输出ID作为封面
+          updated_at: new Date().toISOString(),
+        })
+        .where(eq(ProjectsSchema.id, projectId));
+
+      // 15. 返回成功响应
+      res.status(200).json({
+        success: true,
+        data: {
+          project_id: projectId,
+          step_id: stepId,
+          output_id: outputId,
+          image_url: imageUrl,
+          cost: cost,
+          metadata: metadata,
+        },
+      });
+
+      console.log(
+        `Project generation completed for user: ${session.user.name} (ID: ${session.user.id}), cost: $${cost}`,
+      );
+    } catch (generationError) {
+      // 如果生成失败，更新步骤状态
+      await drizzleDb
+        .update(StepsSchema)
+        .set({
+          status: "failed",
+          error_message:
+            generationError instanceof Error
+              ? generationError.message
+              : "Unknown error",
+          updated_at: new Date().toISOString(),
+        })
+        .where(eq(StepsSchema.id, stepId));
+
+      throw generationError;
     }
-
-    // 8. 提取图像数据
-    const rawImageData = extractImageDataFromResponse(generationResponse);
-
-    // 9. 处理图像数据，确保获得base64格式
-    console.log(
-      `Processing image data for user: ${session.user.name} (ID: ${session.user.id})`,
-    );
-    const processedImageData = await processImageData(rawImageData);
-
-    // 10. 生成唯一图像ID
-    const imageId = nanoid();
-
-    // 11. 将图像数据存储到数据库（只存储base64格式）
-    await drizzleDb.insert(ImagesSchema).values({
-      id: imageId, // 唯一标识
-      user_id: session.user.id, // 用户ID
-      image_data: processedImageData.base64, // Base64编码的图像数据
-      image_format: processedImageData.format, // 图像格式
-      file_size: processedImageData.size, // 文件大小（字节）
-      prompt, // 创作提示词
-      aspect_ratio: aspect_ratio as any, // 图像宽高比
-      model: model as any, // 使用的AI模型
-      generation_params: generation_params
-        ? JSON.stringify(generation_params)
-        : null, // 生成参数（JSON字符串）
-      generation_status: "completed", // 生成状态
-      cost: cost.toString(), // 生成成本
-      status: "active", // 图像状态
-    });
-
-    // 12. 返回成功响应
-    res.status(200).json({
-      success: true,
-      data: {
-        id: imageId, // 图像ID，用于后续查询
-        image_data: processedImageData.base64, // Base64图像数据，供前端直接显示
-        cost, // 本次生成的成本
-        file_size: processedImageData.size, // 文件大小
-        format: processedImageData.format, // 图像格式
-      },
-    });
-
-    console.log(
-      `Image generation completed for user: ${session.user.name} (ID: ${session.user.id}), cost: $${cost}`,
-    );
   } catch (error) {
-    // 13. 错误处理
-    console.error("Image generation error:", error);
-    res.status(500).json({ error: "Failed to generate image" });
+    // 16. 错误处理
+    console.error("Project generation error:", error);
+    res.status(500).json({ error: "Failed to generate project" });
   }
 }
