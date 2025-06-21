@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { NextPage } from 'next';
 import Head from 'next/head';
 import { StepComponent } from '@/components/workspace/StepComponent';
@@ -79,6 +79,16 @@ const WorkspacePage: NextPage = () => {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  // 用于修复 workspace 页面滚动问题
+  useEffect(() => {
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, []);
 
   // Get the last generated image
   const getLastGeneratedImage = (): UploadedImage | null => {
@@ -526,7 +536,7 @@ const WorkspacePage: NextPage = () => {
         <meta name="description" content="AI-powered image generation workspace" />
       </Head>
 
-      <div className="w-full h-full bg-black flex overflow-hidden">
+      <div className="fixed top-20 left-0 right-0 bottom-0 bg-black flex overflow-hidden z-10">
         {/* Left Sidebar */}
         <div className="flex-shrink-0 h-full">
           <ProjectSidebar
@@ -614,7 +624,7 @@ const WorkspacePage: NextPage = () => {
           </div>
 
           {/* Main Content - Scrollable */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden">
             <div className="max-w-4xl mx-auto w-full px-6 py-8">
               {/* Steps Container */}
               <div className="space-y-6 pb-60"> {/* Bottom padding for fixed input */}
@@ -645,7 +655,7 @@ const WorkspacePage: NextPage = () => {
           </div>
 
           {/* Fixed Input Component at Bottom */}
-          <div className="absolute bottom-0 left-0 right-0 flex-shrink-0">
+          <div className="absolute bottom-0 left-0 right-0 flex-shrink-0 z-10">
             <InputComponent
               onSubmit={handleNewPrompt}
               disabled={isGenerating}
