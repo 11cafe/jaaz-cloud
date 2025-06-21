@@ -28,9 +28,16 @@ export default defineConfig({
   out: "./drizzle",
   dialect: "postgresql",
   dbCredentials: {
-    url: process.env.DATABASE_URL!,
-    ssl: "allow",
+    host: "jaaz-dev.ct2ycywmm764.ap-northeast-1.rds.amazonaws.com",
+    port: 5432,
+    user: "postgres",
+    password: "jaaz_581321",
+    database: "jaaz-dev",
+    ssl: {
+      rejectUnauthorized: false,
+    },
   },
+
   verbose: true,
   strict: true,
 });
