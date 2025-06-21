@@ -70,6 +70,43 @@ const WorkspacePage: NextPage = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
+  // Get the last generated image
+  const getLastGeneratedImage = (): UploadedImage | null => {
+    const completedSteps = steps.filter(step => step.status === 'completed' && step.outputs && step.outputs.length > 0);
+    if (completedSteps.length === 0) return null;
+
+    const lastStep = completedSteps[completedSteps.length - 1];
+    const lastOutput = lastStep.outputs?.[0];
+
+    if (lastOutput) {
+      return {
+        url: lastOutput.url,
+        filename: `generated-${lastStep.id}.${lastOutput.format}`
+      };
+    }
+
+    return null;
+  };
+
+  // Convert S3 URL to base64 data URL
+  const convertS3UrlToBase64 = async (s3Url: string, format: string = 'png'): Promise<string> => {
+    try {
+      const response = await fetch(s3Url);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image: ${response.status}`);
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      const base64 = buffer.toString('base64');
+
+      return `data:image/${format};base64,${base64}`;
+    } catch (error) {
+      console.error('Error converting S3 URL to base64:', error);
+      throw error;
+    }
+  };
+
   const handleNewPrompt = async (prompt: string, parameters: any) => {
     if (!prompt.trim()) return;
 
@@ -149,6 +186,14 @@ const WorkspacePage: NextPage = () => {
         if (!currentProjectId) {
           setCurrentProjectId(data.data.project_id);
         }
+
+        // Auto-load the generated image for next prompt
+        setTimeout(() => {
+          setUploadedImages([{
+            url: data.data.image_url,
+            filename: `generated-${data.data.output_id}.${data.data.metadata?.format || 'png'}`
+          }]);
+        }, 100);
 
         toast({
           title: "生成成功",
@@ -291,13 +336,39 @@ const WorkspacePage: NextPage = () => {
 
       setSteps(loadedSteps);
       console.log(`Loaded ${loadedSteps.length} steps for project:`, projectId);
+
+      // Auto-load the last generated image by converting S3 URL to base64
+      const completedSteps = loadedSteps.filter(step => step.status === 'completed' && step.outputs && step.outputs.length > 0);
+      if (completedSteps.length > 0) {
+        const lastStep = completedSteps[completedSteps.length - 1];
+        const lastOutput = lastStep.outputs?.[0];
+        if (lastOutput) {
+          // Convert S3 URL to base64 data URL
+          convertS3UrlToBase64(lastOutput.url, lastOutput.format)
+            .then((base64Url) => {
+              setUploadedImages([{
+                url: base64Url,
+                filename: `generated-${lastStep.id}.${lastOutput.format}`
+              }]);
+            })
+            .catch((error) => {
+              console.error('Failed to convert image to base64:', error);
+              // If conversion fails, don't auto-load the image
+              setUploadedImages([]);
+            });
+        } else {
+          setUploadedImages([]);
+        }
+      } else {
+        setUploadedImages([]);
+      }
     } else {
       // 如果没有项目数据，清空步骤
       setSteps([]);
+      setUploadedImages([]);
     }
 
-    // 清空上传的图片和错误状态
-    setUploadedImages([]);
+    // 清空错误状态
     setError(null);
 
     toast({
