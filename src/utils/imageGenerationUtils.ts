@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import OpenAI, { toFile } from "openai";
 import { JAAZ_IMAGE_MODELS_INFO } from "../constants";
 
 // Image generation parameters interface
@@ -25,29 +25,33 @@ export interface ImageGenerationResponse {
 }
 
 /**
- * Convert base64 data URL to File object for OpenAI API
- * 将base64数据URL转换为OpenAI API所需的File对象
+ * Convert base64 data URL to File using OpenAI's toFile helper
+ * 使用 OpenAI 的 toFile 辅助函数将 base64 数据 URL 转换为 File 对象
  */
-function convertBase64ToFile(
+async function convertBase64ToFile(
   base64DataUrl: string,
   filename: string = "image.png",
-): File {
+): Promise<File> {
   // Extract the base64 data part after the comma
   const base64Data = base64DataUrl.split(",")[1];
 
-  // Convert base64 to binary
-  const binaryString = atob(base64Data);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
+  // Convert base64 to Buffer (Node.js environment)
+  const buffer = Buffer.from(base64Data, "base64");
 
   // Determine MIME type from data URL
   const mimeMatch = base64DataUrl.match(/^data:([^;]+);base64,/);
   const mimeType = mimeMatch ? mimeMatch[1] : "image/png";
 
-  // Create and return File object
-  return new File([bytes], filename, { type: mimeType });
+  // Validate MIME type - OpenAI only supports specific image formats
+  const supportedMimeTypes = ["image/jpeg", "image/png", "image/webp"];
+  const finalMimeType = supportedMimeTypes.includes(mimeType)
+    ? mimeType
+    : "image/png";
+
+  // Use OpenAI's toFile helper to create a proper File object with correct MIME type
+  const file = await toFile(buffer, filename, { type: finalMimeType });
+
+  return file;
 }
 
 /**
@@ -82,7 +86,7 @@ export async function generateImageWithOpenAI(
       if (typeof params.inputImages[0] === "string") {
         // If it's a base64 data URL, convert it to File
         if (params.inputImages[0].startsWith("data:image/")) {
-          imageForEdit = convertBase64ToFile(
+          imageForEdit = await convertBase64ToFile(
             params.inputImages[0],
             "input_image.png",
           );
@@ -112,7 +116,7 @@ export async function generateImageWithOpenAI(
           typeof params.mask === "string" &&
           params.mask.startsWith("data:image/")
         ) {
-          editParams.mask = convertBase64ToFile(params.mask, "mask.png");
+          editParams.mask = await convertBase64ToFile(params.mask, "mask.png");
         } else if (params.mask instanceof File) {
           editParams.mask = params.mask;
         } else {
