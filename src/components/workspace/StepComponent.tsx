@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 
 interface StepComponentProps {
   prompt: string;
+  inputs?: string[];
   outputImage?: string;
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
   onImageDragStart?: (imageUrl: string) => void;
@@ -9,20 +10,25 @@ interface StepComponentProps {
 
 export const StepComponent: React.FC<StepComponentProps> = ({
   prompt,
+  inputs,
   outputImage,
   status,
   onImageDragStart
 }) => {
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const [selectedModalImage, setSelectedModalImage] = useState<string>('');
 
-  const handleImageClick = () => {
-    if (outputImage && status === 'completed') {
+  const handleImageClick = (imageUrl?: string) => {
+    const imageToShow = imageUrl || outputImage;
+    if (imageToShow && (status === 'completed' || imageUrl)) {
+      setSelectedModalImage(imageToShow);
       setIsImageModalOpen(true);
     }
   };
 
   const handleModalClose = () => {
     setIsImageModalOpen(false);
+    setSelectedModalImage('');
   };
 
   const handleDragStart = (e: React.DragEvent) => {
@@ -33,12 +39,54 @@ export const StepComponent: React.FC<StepComponentProps> = ({
     }
   };
 
+  const handleInputImageDragStart = (e: React.DragEvent, inputImageUrl: string) => {
+    e.dataTransfer.setData('text/plain', inputImageUrl);
+    e.dataTransfer.effectAllowed = 'copy';
+    onImageDragStart?.(inputImageUrl);
+  };
+
   return (
     <>
       <div className="bg-gray-900 rounded-lg shadow-sm border border-gray-700 p-6">
-        {/* User Prompt */}
+        {/* User Prompt with Input Images */}
         <div className="mb-6">
           <div className="bg-gray-800 rounded-lg p-4 border-l-4 border-blue-500">
+            {/* Input Images Thumbnails */}
+            {inputs && inputs.length > 0 && (
+              <div className="mb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 002 2z"></path>
+                  </svg>
+                  <span className="text-xs text-gray-400">输入图像:</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {inputs.map((inputUrl, index) => (
+                    <div
+                      key={index}
+                      className="relative group cursor-pointer"
+                      onClick={() => handleImageClick(inputUrl)}
+                    >
+                      <img
+                        src={inputUrl}
+                        alt={`Input image ${index + 1}`}
+                        className="w-16 h-16 object-cover rounded border border-gray-600 hover:border-blue-400 transition-colors"
+                        draggable
+                        onDragStart={(e) => handleInputImageDragStart(e, inputUrl)}
+                      />
+                      <div className="absolute inset-0 bg-black/0 hover:bg-black/20 rounded transition-colors"></div>
+                      <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="bg-black/60 text-white text-xs px-1 py-0.5 rounded text-center min-w-[16px]">
+                          {index + 1}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* User Prompt Text */}
             <p className="text-gray-200 text-sm leading-relaxed">
               {prompt}
             </p>
@@ -59,7 +107,7 @@ export const StepComponent: React.FC<StepComponentProps> = ({
               src={outputImage}
               alt={`Generated image for: ${prompt}`}
               className="w-full h-auto object-contain cursor-pointer hover:opacity-90 transition-opacity"
-              onClick={handleImageClick}
+              onClick={() => handleImageClick()}
               draggable={status === 'completed'}
               onDragStart={handleDragStart}
             />
@@ -100,17 +148,16 @@ export const StepComponent: React.FC<StepComponentProps> = ({
       </div>
 
       {/* Image Modal */}
-      {isImageModalOpen && outputImage && (
+      {isImageModalOpen && selectedModalImage && (
         <div
           className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4"
           onClick={handleModalClose}
         >
           <div className="max-w-full max-h-full flex items-center justify-center">
             <img
-              src={outputImage}
-              alt={`Full size image for: ${prompt}`}
+              src={selectedModalImage}
+              alt="Full size image"
               className="max-w-full max-h-full object-contain"
-            // onClick={(e) => e.stopPropagation()}
             />
           </div>
         </div>

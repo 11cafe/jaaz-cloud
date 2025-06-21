@@ -245,6 +245,7 @@ const WorkspacePage: NextPage = () => {
       step_order: steps.length + 1,
       prompt: prompt,
       model: parameters.model || modelOptions[0].id,
+      inputs: uploadedImages.length > 0 ? uploadedImages.map(img => img.url) : undefined,
       parameters: {
         aspect_ratio: parameters.aspect_ratio || sizeOptions[0].id,
         quality: parameters.quality || 'standard',
@@ -293,6 +294,7 @@ const WorkspacePage: NextPage = () => {
               ...step,
               status: 'completed' as const,
               project_id: data.data.project_id,
+              inputs: uploadedImages.length > 0 ? uploadedImages.map(img => img.url) : undefined,
               outputs: [
                 {
                   id: data.data.output_id,
@@ -672,6 +674,7 @@ const WorkspacePage: NextPage = () => {
                     <StepComponent
                       key={step.id}
                       prompt={step.prompt}
+                      inputs={step.inputs}
                       outputImage={step.outputs?.[0]?.url}
                       status={step.status}
                       onImageDragStart={handleImageDragStart}

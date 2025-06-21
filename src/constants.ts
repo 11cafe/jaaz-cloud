@@ -37,13 +37,13 @@ export const JAAZ_IMAGE_MODELS_INFO = {
     name: "Flux Kontext Pro",
     description: "Black Forest Labs",
     price: 0.04,
-    isSupportImageInput: true,
+    isSupportImageInput: false,
   },
   "black-forest-labs/flux-kontext-max": {
     name: "Flux Kontext Max",
     description: "Black Forest Labs",
     price: 0.08,
-    isSupportImageInput: true,
+    isSupportImageInput: false,
   },
   "recraft-ai/recraft-v3": {
     name: "Recraft V3",

@@ -274,6 +274,7 @@ const ProjectDetailPage: NextPage<ProjectDetailPageProps> = ({ project, error })
                       {/* 步骤内容 */}
                       <StepComponent
                         prompt={step.prompt || ''}
+                        inputs={step.inputs}
                         outputImage={step.outputs?.[0]?.url}
                         status={step.status}
                       />
