@@ -10,7 +10,7 @@ import { Badge } from "./ui/badge";
 const navigation: Array<{ name: string; href: string; target?: "_blank" }> = [
   {
     name: "生成",
-    href: "/generate",
+    href: "/workspace",
   },
   {
     name: "广场",
