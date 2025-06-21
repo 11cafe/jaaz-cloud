@@ -83,15 +83,12 @@ const convertApiDataToSharedImage = (apiData: ApiSharedProject): SharedImage => 
   const userAvatar = apiData.user_avatar ||
     `https://images.unsplash.com/photo-${Math.floor(Math.random() * 1000000000)}?w=32&h=32&fit=crop&crop=face&auto=format`;
 
-  // 从项目标题或描述中提取提示词，如果没有则使用默认值
-  const prompt = apiData.description || apiData.title || "AI Generated Image";
-
   return {
     id: apiData.id,
     user_id: Math.floor(Math.random() * 1000), // This should come from API when available
     user_name: apiData.username,
     user_avatar: userAvatar,
-    prompt: prompt,
+    title: apiData.title || "AI Generated Image",
     aspect_ratio: "1:1" as AspectRatio, // TODO: 从项目步骤中获取实际宽高比
     model: "openai/gpt-image-1" as Model, // TODO: 从项目步骤中获取实际模型
     image_url: imageUrl,
@@ -155,7 +152,7 @@ const ImageCard: React.FC<ImageCardProps> = ({ image, onLike, onClick }) => {
             {/* Actual Image */}
             <img
               src={image.image_url}
-              alt={image.prompt}
+              alt={image.title}
               className={`w-full rounded-t-lg transition-all duration-500 ${imageLoaded ? 'opacity-100' : 'opacity-0 absolute inset-0'
                 } group-hover:scale-105`}
               style={{ aspectRatio: image.aspect_ratio, objectFit: 'cover' }}
@@ -188,24 +185,32 @@ const ImageCard: React.FC<ImageCardProps> = ({ image, onLike, onClick }) => {
 
           {/* Content */}
           <div className="p-4">
-            {/* User info */}
-            <div className="flex items-center gap-3 mb-3">
-              <img
-                src={image.user_avatar}
-                alt={image.user_name}
-                className="w-8 h-8 rounded-full object-cover"
-              />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{image.user_name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {new Date(image.shared_at).toLocaleDateString('zh-CN')}
-                </p>
-              </div>
+            {/* Title */}
+            <div className="mb-3">
+              <h3 className="text-sm font-medium line-clamp-2" title={image.title}>
+                {image.title}
+              </h3>
             </div>
 
-            {/* Stats */}
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <div className="flex items-center gap-4">
+            {/* User info and Stats */}
+            <div className="flex items-end justify-between gap-3">
+              {/* User info */}
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <img
+                  src={image.user_avatar}
+                  alt={image.user_name}
+                  className="w-8 h-8 rounded-full object-cover"
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{image.user_name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(image.shared_at).toLocaleDateString('zh-CN')}
+                  </p>
+                </div>
+              </div>
+
+              {/* Stats */}
+              <div className="flex items-center gap-3 text-xs text-muted-foreground">
                 <span className="flex items-center gap-1">
                   <IconHeart size={12} className={isLiked ? "fill-red-500 text-red-500" : ""} />
                   {likeCount}
@@ -215,9 +220,6 @@ const ImageCard: React.FC<ImageCardProps> = ({ image, onLike, onClick }) => {
                   {image.view_count.toLocaleString()}
                 </span>
               </div>
-              <span className="text-xs bg-muted px-2 py-1 rounded">
-                {image.aspect_ratio}
-              </span>
             </div>
           </div>
         </CardContent>
@@ -413,76 +415,6 @@ export default function GalleryPage() {
         <p className="text-muted-foreground">
           发现来自全球创作者的精彩 AI 艺术作品
         </p>
-      </motion.div>
-
-      {/* Filters */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="mb-8"
-      >
-        <div className="flex justify-end gap-4">
-          {/* Model Filter */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="gap-2">
-                <IconFilter size={16} />
-                {modelOptions.find(opt => opt.value === selectedModel)?.label}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              {modelOptions.map(option => (
-                <DropdownMenuItem
-                  key={option.value}
-                  onClick={() => setSelectedModel(option.value as Model | "all")}
-                >
-                  {option.label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* Aspect Ratio Filter */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="gap-2">
-                <IconPhoto size={16} />
-                {aspectRatioOptions.find(opt => opt.value === selectedAspectRatio)?.label}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              {aspectRatioOptions.map(option => (
-                <DropdownMenuItem
-                  key={option.value}
-                  onClick={() => setSelectedAspectRatio(option.value as AspectRatio | "all")}
-                >
-                  {option.label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* Sort */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="gap-2">
-                <IconSortDescending size={16} />
-                {sortOptions.find(opt => opt.value === sortBy)?.label}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              {sortOptions.map(option => (
-                <DropdownMenuItem
-                  key={option.value}
-                  onClick={() => setSortBy(option.value as SortBy)}
-                >
-                  {option.label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
       </motion.div>
 
       {/* Error state */}

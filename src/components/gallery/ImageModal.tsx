@@ -113,7 +113,7 @@ export const ImageModal: React.FC<ImageModalProps> = ({
                   {/* Main Image */}
                   <img
                     src={image.image_url}
-                    alt={image.prompt}
+                    alt={image.title}
                     className={`max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl transition-opacity duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-0'
                       }`}
                     onLoad={() => setImageLoaded(true)}
@@ -166,7 +166,7 @@ export const ImageModal: React.FC<ImageModalProps> = ({
                     Prompt
                   </h4>
                   <p className="text-sm leading-relaxed bg-muted/50 rounded-lg p-3">
-                    {image.prompt}
+                    {image.title}
                   </p>
                 </div>
 

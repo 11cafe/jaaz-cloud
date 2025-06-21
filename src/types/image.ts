@@ -26,7 +26,7 @@ export interface SharedImage {
   user_id: number;
   user_name?: string; // Joined from user table
   user_avatar?: string; // Joined from user table
-  prompt: string;
+  title: string;
   aspect_ratio: AspectRatio;
   model: Model;
   image_url: string;
