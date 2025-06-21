@@ -431,6 +431,33 @@ const WorkspacePage: NextPage = () => {
     setUploadedImages(uploadedImages.filter((_, i) => i !== index));
   };
 
+  const handleImageDrop = (imageUrl: string) => {
+    // Convert the dragged image URL to an uploaded image
+    const filename = `dragged-image-${Date.now()}.png`;
+    const newImage: UploadedImage = {
+      url: imageUrl,
+      filename: filename
+    };
+
+    const hadExistingImage = uploadedImages.length > 0;
+
+    // Replace the current uploaded images with the dragged image
+    setUploadedImages([newImage]);
+
+    toast({
+      title: hadExistingImage ? "图片已替换" : "图片已添加",
+      description: hadExistingImage
+        ? "已将生成的图片替换为输入图片"
+        : "已将生成的图片添加到输入框",
+      variant: "success",
+    });
+  };
+
+  const handleImageDragStart = (imageUrl: string) => {
+    // Optional: You can add any logic here when drag starts
+    console.log('Drag started for image:', imageUrl);
+  };
+
   const handleProjectSelect = (projectId: string, projectData?: ProjectDetail) => {
     // 切换项目ID
     setCurrentProjectId(projectId);
@@ -647,6 +674,7 @@ const WorkspacePage: NextPage = () => {
                       prompt={step.prompt}
                       outputImage={step.outputs?.[0]?.url}
                       status={step.status}
+                      onImageDragStart={handleImageDragStart}
                     />
                   ))
                 )}
@@ -666,6 +694,7 @@ const WorkspacePage: NextPage = () => {
               onUploadClick={handleUploadClick}
               onRemoveImage={removeUploadedImage}
               onFileChange={handleFileChange}
+              onImageDrop={handleImageDrop}
               isUploading={isUploading}
               error={error}
               fileInputRef={fileInputRef}

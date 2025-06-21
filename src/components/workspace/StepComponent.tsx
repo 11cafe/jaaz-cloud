@@ -4,12 +4,14 @@ interface StepComponentProps {
   prompt: string;
   outputImage?: string;
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+  onImageDragStart?: (imageUrl: string) => void;
 }
 
 export const StepComponent: React.FC<StepComponentProps> = ({
   prompt,
   outputImage,
-  status
+  status,
+  onImageDragStart
 }) => {
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
 
@@ -21,6 +23,14 @@ export const StepComponent: React.FC<StepComponentProps> = ({
 
   const handleModalClose = () => {
     setIsImageModalOpen(false);
+  };
+
+  const handleDragStart = (e: React.DragEvent) => {
+    if (outputImage && status === 'completed') {
+      e.dataTransfer.setData('text/plain', outputImage);
+      e.dataTransfer.effectAllowed = 'copy';
+      onImageDragStart?.(outputImage);
+    }
   };
 
   return (
@@ -44,13 +54,25 @@ export const StepComponent: React.FC<StepComponentProps> = ({
             </div>
           </div>
         ) : outputImage ? (
-          <div className="w-full bg-gray-800 rounded-lg overflow-hidden">
+          <div className="w-full bg-gray-800 rounded-lg overflow-hidden relative group">
             <img
               src={outputImage}
               alt={`Generated image for: ${prompt}`}
               className="w-full h-auto object-contain cursor-pointer hover:opacity-90 transition-opacity"
               onClick={handleImageClick}
+              draggable={status === 'completed'}
+              onDragStart={handleDragStart}
             />
+            {status === 'completed' && (
+              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="bg-black/60 text-white text-xs px-2 py-1 rounded flex items-center gap-1">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"></path>
+                  </svg>
+                  拖拽到输入框
+                </div>
+              </div>
+            )}
           </div>
         ) : status === 'failed' ? (
           <div className="w-full aspect-square bg-gray-800 rounded-lg flex items-center justify-center border-2 border-dashed border-red-500">
@@ -88,7 +110,7 @@ export const StepComponent: React.FC<StepComponentProps> = ({
               src={outputImage}
               alt={`Full size image for: ${prompt}`}
               className="max-w-full max-h-full object-contain"
-              // onClick={(e) => e.stopPropagation()}
+            // onClick={(e) => e.stopPropagation()}
             />
           </div>
         </div>
