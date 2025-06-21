@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
+import Image from "next/image";
 import { motion } from "framer-motion";
 import {
   IconSearch,
@@ -22,6 +23,7 @@ import {
 import { ImageModal } from "@/components/gallery/ImageModal";
 import { type SharedImage, type Model, type AspectRatio, type SortBy } from "@/types/image";
 import { JAAZ_IMAGE_MODELS, JAAZ_IMAGE_MODELS_INFO, IMAGE_RATIO_OPTIONS } from "@/constants";
+import router from "next/router";
 
 // Filter and sort options
 const modelOptions = [
@@ -135,22 +137,37 @@ const ImageCard: React.FC<ImageCardProps> = ({ image, onLike, onClick }) => {
         <CardContent className="p-0">
           {/* Image */}
           <div className="relative">
-            <div
-              className={`bg-muted rounded-t-lg transition-opacity duration-300 ${imageLoaded ? 'opacity-0' : 'opacity-100'
-                }`}
-              style={{ aspectRatio: image.aspect_ratio }}
-            />
+            {/* Placeholder */}
+            {!imageLoaded && (
+              <div
+                className="bg-gradient-to-br from-muted to-muted/50 rounded-t-lg flex items-center justify-center min-h-[200px]"
+                style={{ aspectRatio: image.aspect_ratio, minHeight: '200px' }}
+              >
+                <div className="flex flex-col items-center gap-4 text-muted-foreground">
+                  <div className="relative">
+                    <IconPhoto size={64} className="animate-pulse" />
+                  </div>
+                  <div className="text-base font-medium">加载中...</div>
+                </div>
+              </div>
+            )}
+
+            {/* Actual Image */}
             <img
               src={image.image_url}
               alt={image.prompt}
-              className={`w-full rounded-t-lg transition-all duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-0 absolute inset-0'
+              className={`w-full rounded-t-lg transition-all duration-500 ${imageLoaded ? 'opacity-100' : 'opacity-0 absolute inset-0'
                 } group-hover:scale-105`}
               style={{ aspectRatio: image.aspect_ratio, objectFit: 'cover' }}
               onLoad={() => setImageLoaded(true)}
+              onError={() => {
+                // Handle image load error by showing a fallback
+                setImageLoaded(true);
+              }}
             />
 
             {/* Featured badge */}
-            {image.is_featured && (
+            {image.is_featured && imageLoaded && (
               <div className="absolute top-3 left-3">
                 <Badge variant="default" className="bg-yellow-500 hover:bg-yellow-600">
                   <IconSparkles size={12} className="mr-1" />
@@ -160,11 +177,13 @@ const ImageCard: React.FC<ImageCardProps> = ({ image, onLike, onClick }) => {
             )}
 
             {/* Model badge */}
-            <div className="absolute top-3 right-3">
-              <Badge variant={'default'}>
-                {JAAZ_IMAGE_MODELS_INFO[image.model]?.name || image.model}
-              </Badge>
-            </div>
+            {imageLoaded && (
+              <div className="absolute top-3 right-3">
+                <Badge variant={'default'}>
+                  {JAAZ_IMAGE_MODELS_INFO[image.model]?.name || image.model}
+                </Badge>
+              </div>
+            )}
           </div>
 
           {/* Content */}
@@ -362,8 +381,10 @@ export default function GalleryPage() {
   };
 
   const handleImageClick = (image: SharedImage) => {
-    setSelectedImage(image);
-    setIsModalOpen(true);
+    // setSelectedImage(image);
+    // setIsModalOpen(true);
+
+    router.push(`/gallery/${image.id}`);
   };
 
   const handleCloseModal = () => {
