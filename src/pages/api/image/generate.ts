@@ -22,7 +22,7 @@ import {
   ImageGenerationResponse,
 } from "@/utils/imageGenerationUtils";
 import { uploadImageToS3 } from "@/utils/s3Utils";
-import { eq } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 
 // Configure API route to accept larger payloads for image uploads
 export const config = {
@@ -35,6 +35,7 @@ export const config = {
 
 // 项目生成请求的数据结构
 interface GenerateProjectRequest {
+  project_id?: string; // 可选：指定要添加步骤的项目ID
   title?: string; // 项目标题（可选）
   description?: string; // 项目描述（可选）
   prompt: string; // 创作提示词（必填）
@@ -196,6 +197,7 @@ export default async function handler(
   try {
     // 3. 解析请求参数
     const {
+      project_id,
       title = "AI生成项目",
       description,
       prompt,
@@ -266,25 +268,58 @@ export default async function handler(
     }
 
     // 6. 生成项目ID和步骤ID
-    const projectId = nanoid();
+    const projectId = project_id || nanoid();
     const stepId = nanoid();
 
-    // 7. 创建项目记录
-    await drizzleDb.insert(ProjectsSchema).values({
-      id: projectId,
-      user_id: session.user.id,
-      title: title,
-      description: description,
-      status: "active",
-      is_public: false,
-      total_cost: cost.toString(),
-    });
+    // 7. 处理项目创建或复用
+    let stepOrder = 1;
+
+    if (project_id) {
+      // 复用现有项目：验证项目存在且属于当前用户
+      const existingProject = await drizzleDb
+        .select()
+        .from(ProjectsSchema)
+        .where(
+          and(
+            eq(ProjectsSchema.id, project_id),
+            eq(ProjectsSchema.user_id, session.user.id),
+          ),
+        )
+        .limit(1);
+
+      if (!existingProject.length) {
+        return res
+          .status(404)
+          .json({ error: "Project not found or access denied" });
+      }
+
+      // 计算新步骤的顺序号
+      const lastStep = await drizzleDb
+        .select({ step_order: StepsSchema.step_order })
+        .from(StepsSchema)
+        .where(eq(StepsSchema.project_id, project_id))
+        .orderBy(desc(StepsSchema.step_order))
+        .limit(1);
+
+      stepOrder = lastStep.length > 0 ? lastStep[0].step_order + 1 : 1;
+    } else {
+      // 创建新项目
+      await drizzleDb.insert(ProjectsSchema).values({
+        id: projectId,
+        user_id: session.user.id,
+        title: title,
+        description: description,
+        status: "active",
+        is_public: false,
+        total_cost: cost.toString(),
+      });
+    }
 
     // 8. 创建步骤记录
     await drizzleDb.insert(StepsSchema).values({
       id: stepId,
       project_id: projectId,
-      step_order: 1,
+      step_order: stepOrder,
       prompt: prompt,
       model: model,
       inputs: input_images,
@@ -361,15 +396,17 @@ export default async function handler(
         })
         .where(eq(StepsSchema.id, stepId));
 
-      // 14. 更新项目状态和封面
-      await drizzleDb
-        .update(ProjectsSchema)
-        .set({
-          status: "completed",
-          cover: processedImageData.s3Url, // 直接存储S3 URL作为封面
-          updated_at: new Date().toISOString(),
-        })
-        .where(eq(ProjectsSchema.id, projectId));
+      // 14. 更新项目状态和封面（仅新项目需要）
+      if (!project_id) {
+        await drizzleDb
+          .update(ProjectsSchema)
+          .set({
+            status: "completed",
+            cover: processedImageData.s3Url, // 直接存储S3 URL作为封面
+            updated_at: new Date().toISOString(),
+          })
+          .where(eq(ProjectsSchema.id, projectId));
+      }
 
       // 15. 返回成功响应，图片存储到S3，返回base64 url，更快展示
       const imgBase64Url = `data:image/${processedImageData.format};base64,${processedImageData.base64}`;

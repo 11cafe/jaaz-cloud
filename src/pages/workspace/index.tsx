@@ -96,17 +96,24 @@ const WorkspacePage: NextPage = () => {
 
     try {
       // Call the generate API
+      const requestBody: any = {
+        prompt,
+        model: parameters.model || modelOptions[0].id,
+        aspect_ratio: parameters.aspect_ratio || sizeOptions[0].id,
+        input_images: uploadedImages.map((image) => image.url),
+      };
+
+      // 如果有当前项目ID，则复用项目
+      if (currentProjectId) {
+        requestBody.project_id = currentProjectId;
+      }
+
       const response = await fetch("/api/image/generate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          prompt,
-          model: parameters.model || modelOptions[0].id,
-          aspect_ratio: parameters.aspect_ratio || sizeOptions[0].id,
-          input_images: uploadedImages.map((image) => image.url),
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();
@@ -253,7 +260,7 @@ const WorkspacePage: NextPage = () => {
   };
 
   const handleProjectSelect = (projectId: string) => {
-    // TODO: Load project data and steps
+    // 暂时只切换项目ID，不加载历史数据
     setCurrentProjectId(projectId);
     console.log('Selected project:', projectId);
     toast({
@@ -263,12 +270,13 @@ const WorkspacePage: NextPage = () => {
     });
   };
 
-  const handleNewProject = () => {
-    // TODO: Create new project
+  const handleNewProject = (project?: any) => {
+    // 重置为空状态
     console.log('Creating new project');
     setCurrentProjectId(null);
     setSteps([]);
     setUploadedImages([]);
+    setError(null);
     toast({
       title: "新项目",
       description: "已创建新项目，开始你的创作吧！",
