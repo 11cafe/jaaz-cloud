@@ -23,6 +23,7 @@ import {
 import { ImageModal } from "@/components/gallery/ImageModal";
 import { type SharedImage, type Model, type AspectRatio, type SortBy } from "@/types/image";
 import { JAAZ_IMAGE_MODELS, JAAZ_IMAGE_MODELS_INFO, IMAGE_RATIO_OPTIONS } from "@/constants";
+import router from "next/router";
 
 // Filter and sort options
 const modelOptions = [
@@ -380,8 +381,10 @@ export default function GalleryPage() {
   };
 
   const handleImageClick = (image: SharedImage) => {
-    setSelectedImage(image);
-    setIsModalOpen(true);
+    // setSelectedImage(image);
+    // setIsModalOpen(true);
+
+    router.push(`/gallery/${image.id}`);
   };
 
   const handleCloseModal = () => {
