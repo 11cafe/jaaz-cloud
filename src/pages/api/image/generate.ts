@@ -172,6 +172,71 @@ async function processImageData(imageData: {
 }
 
 /**
+ * 验证图像URL是否为有效的HTTP/HTTPS URL
+ */
+function isValidHttpUrl(url: string): boolean {
+  try {
+    const urlObj = new URL(url);
+    return urlObj.protocol === "http:" || urlObj.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 验证图像URL是否为有效的base64 data URL
+ */
+function isValidBase64DataUrl(url: string): boolean {
+  return url.startsWith("data:image/");
+}
+
+/**
+ * 将HTTP URL图像转换为base64 data URL
+ */
+async function convertHttpUrlToBase64DataUrl(httpUrl: string): Promise<string> {
+  try {
+    const imageData = await downloadImageAsBase64(httpUrl);
+    return `data:image/${imageData.format};base64,${imageData.base64}`;
+  } catch (error) {
+    throw new Error(
+      `Failed to convert HTTP URL to base64: ${error instanceof Error ? error.message : "Unknown error"}`,
+    );
+  }
+}
+
+/**
+ * 处理输入图像数组，将HTTP URL转换为base64 data URL
+ */
+async function processInputImages(inputImages: string[]): Promise<string[]> {
+  const processedImages: string[] = [];
+
+  for (let i = 0; i < inputImages.length; i++) {
+    const imageUrl = inputImages[i];
+
+    if (isValidBase64DataUrl(imageUrl)) {
+      // 已经是base64 data URL，直接使用
+      processedImages.push(imageUrl);
+    } else if (isValidHttpUrl(imageUrl)) {
+      // 是HTTP URL，转换为base64 data URL
+      try {
+        const base64DataUrl = await convertHttpUrlToBase64DataUrl(imageUrl);
+        processedImages.push(base64DataUrl);
+      } catch (error) {
+        throw new Error(
+          `Failed to process input image ${i + 1}: ${error instanceof Error ? error.message : "Unknown error"}`,
+        );
+      }
+    } else {
+      throw new Error(
+        `Input image ${i + 1} is not a valid image URL or data URL`,
+      );
+    }
+  }
+
+  return processedImages;
+}
+
+/**
  * API处理函数
  */
 export default async function handler(
@@ -222,22 +287,25 @@ export default async function handler(
           .json({ error: "Maximum 5 input images allowed" });
       }
 
-      // 验证每个图像是否为有效的 base64 data URL
+      // 验证每个图像是否为有效的 base64 data URL 或 HTTP URL
       for (let i = 0; i < input_images.length; i++) {
         const imageUrl = input_images[i];
-        if (!imageUrl.startsWith("data:image/")) {
+
+        if (!isValidBase64DataUrl(imageUrl) && !isValidHttpUrl(imageUrl)) {
           return res.status(400).json({
-            error: `Input image ${i + 1} is not a valid image data URL`,
+            error: `Input image ${i + 1} is not a valid image data URL or HTTP URL`,
           });
         }
 
-        // 检查base64数据大小（约估算，base64比原始数据大约33%）
-        const base64Data = imageUrl.split(",")[1];
-        if (base64Data && base64Data.length > 7000000) {
-          // 约5MB的base64
-          return res.status(400).json({
-            error: `Input image ${i + 1} is too large (max 5MB)`,
-          });
+        // 如果是base64 data URL，检查数据大小
+        if (isValidBase64DataUrl(imageUrl)) {
+          const base64Data = imageUrl.split(",")[1];
+          if (base64Data && base64Data.length > 7000000) {
+            // 约5MB的base64
+            return res.status(400).json({
+              error: `Input image ${i + 1} is too large (max 5MB)`,
+            });
+          }
         }
       }
 
@@ -311,14 +379,29 @@ export default async function handler(
       });
     }
 
-    // 8. 创建步骤记录
+    // 8. 处理输入图像（将HTTP URL转换为base64 data URL）
+    let processedInputImages = input_images;
+    if (input_images && input_images.length > 0) {
+      try {
+        processedInputImages = await processInputImages(input_images);
+      } catch (error) {
+        return res.status(400).json({
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to process input images",
+        });
+      }
+    }
+
+    // 9. 创建步骤记录
     await drizzleDb.insert(StepsSchema).values({
       id: stepId,
       project_id: projectId,
       step_order: stepOrder,
       prompt: prompt,
       model: model,
-      inputs: input_images,
+      inputs: input_images, // 使用原始图像数组存入数据库
       parameters: {
         aspect_ratio,
         size,
@@ -332,7 +415,7 @@ export default async function handler(
       cost: cost.toString(),
     });
 
-    // 9. 调用图像生成API
+    // 10. 调用图像生成API
     console.log(
       `Calling image generation API for user: ${session.user.name} (ID: ${session.user.id}), model: ${model}`,
     );
@@ -342,7 +425,7 @@ export default async function handler(
       model: model,
       aspectRatio: aspect_ratio,
       size: size,
-      inputImages: input_images,
+      inputImages: processedInputImages, // 使用处理后的图像数组
       quality: quality,
       outputFormat: output_format,
       outputCompression: output_compression,
@@ -353,7 +436,7 @@ export default async function handler(
       // 调用图像生成方法
       const generationResponse = await generateImage(generationParams);
 
-      // 10. 检查生成是否成功
+      // 11. 检查生成是否成功
       if (
         generationResponse.status !== "succeeded" &&
         !generationResponse.output &&
@@ -362,7 +445,7 @@ export default async function handler(
         throw new Error("Image generation failed");
       }
 
-      // 11. 提取并处理图像数据
+      // 12. 提取并处理图像数据
       const rawImageData = extractImageDataFromResponse(generationResponse);
       const processedImageData = await processImageData(rawImageData);
       const metadata = {
@@ -371,7 +454,7 @@ export default async function handler(
         s3_url: processedImageData.s3Url,
       };
 
-      // 12. 创建输出记录
+      // 13. 创建输出记录
       const outputId = nanoid();
       await drizzleDb.insert(StepOutputsSchema).values({
         id: outputId,
@@ -383,7 +466,7 @@ export default async function handler(
         metadata: metadata,
       });
 
-      // 13. 更新步骤状态为完成
+      // 14. 更新步骤状态为完成
       await drizzleDb
         .update(StepsSchema)
         .set({
@@ -392,7 +475,7 @@ export default async function handler(
         })
         .where(eq(StepsSchema.id, stepId));
 
-      // 14. 更新项目状态和封面（仅新项目需要）
+      // 15. 更新项目状态和封面（仅新项目需要）
       if (!project_id) {
         await drizzleDb
           .update(ProjectsSchema)
@@ -404,15 +487,16 @@ export default async function handler(
           .where(eq(ProjectsSchema.id, projectId));
       }
 
-      // 15. 返回成功响应，图片存储到S3，返回base64 url，更快展示
-      const imgBase64Url = `data:image/${processedImageData.format};base64,${processedImageData.base64}`;
+      // 16. 返回成功响应，图片存储到S3，返回base64 url，更快展示
+      // const imgBase64Url = `data:image/${processedImageData.format};base64,${processedImageData.base64}`;
+      //
       res.status(200).json({
         success: true,
         data: {
           project_id: projectId,
           step_id: stepId,
           output_id: outputId,
-          image_url: imgBase64Url,
+          image_url: processedImageData.s3Url,
           cost: cost,
           metadata: metadata,
         },
@@ -438,7 +522,7 @@ export default async function handler(
       throw generationError;
     }
   } catch (error) {
-    // 16. 错误处理
+    // 17. 错误处理
     console.error("Project generation error:", error);
     res.status(500).json({ error: "Failed to generate project" });
   }
