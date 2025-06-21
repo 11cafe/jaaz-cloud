@@ -24,6 +24,9 @@ import {
 import { uploadImageToS3 } from "@/utils/s3Utils";
 import { eq, and, desc } from "drizzle-orm";
 
+// Set maximum duration for image generation (5 minutes)
+export const maxDuration = 300;
+
 // Configure API route to accept larger payloads for image uploads
 export const config = {
   api: {
@@ -433,8 +436,17 @@ export default async function handler(
     };
 
     try {
-      // 调用图像生成方法
-      const generationResponse = await generateImage(generationParams);
+      // 调用图像生成方法，添加超时控制
+      const generationResponse = await Promise.race([
+        generateImage(generationParams),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () =>
+              reject(new Error("Image generation timeout after 300 seconds")),
+            300000,
+          ),
+        ),
+      ]);
 
       // 11. 检查生成是否成功
       if (
