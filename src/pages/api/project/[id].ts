@@ -1,7 +1,7 @@
 /**
  * 单个项目详情API
- * 功能：根据项目ID获取特定项目的完整信息（包含步骤和输出）
- * 方法：GET
+ * 功能：根据项目ID获取特定项目的完整信息（包含步骤和输出）或更新项目信息
+ * 方法：GET, PATCH
  * 认证：需要用户登录，且只能访问自己的项目或公开的项目
  */
 
@@ -15,6 +15,12 @@ import {
 } from "@/schema/project";
 import { eq, and, or, inArray } from "drizzle-orm";
 
+// 更新项目请求的数据结构
+interface UpdateProjectRequest {
+  title?: string;
+  description?: string;
+}
+
 /**
  * API处理函数
  */
@@ -23,8 +29,8 @@ export default async function handler(
   res: NextApiResponse,
 ) {
   // 1. 验证HTTP方法
-  if (req.method !== "GET") {
-    res.setHeader("Allow", ["GET"]);
+  if (req.method !== "GET" && req.method !== "PATCH") {
+    res.setHeader("Allow", ["GET", "PATCH"]);
     return res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 
@@ -43,6 +49,74 @@ export default async function handler(
     if (!projectId || typeof projectId !== "string") {
       return res.status(400).json({
         error: "Project ID is required",
+      });
+    }
+
+    // Handle PATCH request for updating project
+    if (req.method === "PATCH") {
+      const { title, description } = req.body as UpdateProjectRequest;
+
+      // Validate that at least one field is provided
+      if (!title && !description) {
+        return res.status(400).json({
+          error: "At least one field (title or description) is required",
+        });
+      }
+
+      // Verify project exists and belongs to current user
+      const project = await drizzleDb
+        .select({
+          id: ProjectsSchema.id,
+          user_id: ProjectsSchema.user_id,
+        })
+        .from(ProjectsSchema)
+        .where(
+          and(
+            eq(ProjectsSchema.id, projectId),
+            eq(ProjectsSchema.user_id, userId),
+          ),
+        )
+        .limit(1);
+
+      if (!project.length) {
+        return res.status(404).json({
+          error: "Project not found or access denied",
+        });
+      }
+
+      // Update project
+      const updateData: any = {
+        updated_at: new Date().toISOString(),
+      };
+
+      if (title !== undefined) {
+        if (!title.trim()) {
+          return res.status(400).json({
+            error: "Title cannot be empty",
+          });
+        }
+        updateData.title = title.trim();
+      }
+
+      if (description !== undefined) {
+        updateData.description = description?.trim() || null;
+      }
+
+      const updatedProject = await drizzleDb
+        .update(ProjectsSchema)
+        .set(updateData)
+        .where(eq(ProjectsSchema.id, projectId))
+        .returning({
+          id: ProjectsSchema.id,
+          title: ProjectsSchema.title,
+          description: ProjectsSchema.description,
+          updated_at: ProjectsSchema.updated_at,
+        });
+
+      return res.status(200).json({
+        success: true,
+        data: updatedProject[0],
+        message: "Project updated successfully",
       });
     }
 

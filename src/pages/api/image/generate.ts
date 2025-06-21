@@ -96,7 +96,7 @@ async function downloadImageAsBase64(imageUrl: string): Promise<{
   size: number;
 }> {
   try {
-    console.log(`Downloading image from URL: ${imageUrl}`);
+    // console.log(`Downloading image from URL: ${imageUrl}`);
 
     const response = await fetch(imageUrl);
     if (!response.ok) {
@@ -114,10 +114,6 @@ async function downloadImageAsBase64(imageUrl: string): Promise<{
 
     // 转换为base64
     const base64 = buffer.toString("base64");
-
-    console.log(
-      `Image downloaded successfully: ${buffer.length} bytes, format: ${format}`,
-    );
 
     return {
       base64,

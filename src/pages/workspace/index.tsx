@@ -4,8 +4,12 @@ import Head from 'next/head';
 import { StepComponent } from '@/components/workspace/StepComponent';
 import { InputComponent } from '@/components/workspace/InputComponent';
 import { ProjectSidebar } from '@/components/workspace/ProjectSidebar';
+import { ShareModal } from '@/components/workspace/ShareModal';
 import { useToast } from '@/components/ui/use-toast';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { ProjectDetail } from '@/types/project';
+import { ShareIcon, EditIcon, CheckIcon, XIcon } from 'lucide-react';
 import {
   JAAZ_IMAGE_MODELS,
   JAAZ_IMAGE_MODELS_INFO,
@@ -63,10 +67,16 @@ const WorkspacePage: NextPage = () => {
   // State management
   const [steps, setSteps] = useState<Step[]>([]);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
+  const [projectTitle, setProjectTitle] = useState<string>('AI 图像生成');
+  const [projectStatus, setProjectStatus] = useState<string>('draft');
+  const [isProjectShared, setIsProjectShared] = useState(false);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [tempTitle, setTempTitle] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -86,6 +96,111 @@ const WorkspacePage: NextPage = () => {
     }
 
     return null;
+  };
+
+  // Get all generated images for sharing
+  const getAllGeneratedImages = () => {
+    const completedSteps = steps.filter(step => step.status === 'completed' && step.outputs && step.outputs.length > 0);
+    const images: Array<{ id: string; url: string; format: string }> = [];
+
+    completedSteps.forEach(step => {
+      step.outputs?.forEach(output => {
+        images.push({
+          id: output.id,
+          url: output.url,
+          format: output.format,
+        });
+      });
+    });
+
+    return images;
+  };
+
+  // Handle title editing
+  const handleEditTitle = () => {
+    setTempTitle(projectTitle);
+    setIsEditingTitle(true);
+  };
+
+  const handleSaveTitle = async () => {
+    if (!tempTitle.trim()) {
+      toast({
+        title: "错误",
+        description: "项目标题不能为空",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setProjectTitle(tempTitle.trim());
+    setIsEditingTitle(false);
+
+    // If we have a project ID, update the project title in the database
+    if (currentProjectId) {
+      try {
+        const response = await fetch(`/api/project/${currentProjectId}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            title: tempTitle.trim(),
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to update project title');
+        }
+
+        toast({
+          title: "成功",
+          description: "项目标题已更新",
+          variant: "success",
+        });
+      } catch (error) {
+        console.error('Failed to update project title:', error);
+        toast({
+          title: "错误",
+          description: "更新项目标题失败",
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
+  const handleCancelEditTitle = () => {
+    setTempTitle('');
+    setIsEditingTitle(false);
+  };
+
+  // Handle share modal
+  const handleShareClick = () => {
+    if (!currentProjectId) {
+      toast({
+        title: "错误",
+        description: "请先创建或选择一个项目",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const generatedImages = getAllGeneratedImages();
+    if (generatedImages.length === 0) {
+      toast({
+        title: "错误",
+        description: "请先生成至少一张图片",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsShareModalOpen(true);
+  };
+
+  // Handle share success
+  const handleShareSuccess = () => {
+    setIsProjectShared(true);
+    setProjectStatus('shared');
   };
 
   // Convert S3 URL to base64 data URL
@@ -185,6 +300,7 @@ const WorkspacePage: NextPage = () => {
         // Set current project ID if it's the first step
         if (!currentProjectId) {
           setCurrentProjectId(data.data.project_id);
+          setProjectStatus('active'); // 有内容的项目状态为active
         }
 
         // Auto-load the generated image for next prompt
@@ -309,6 +425,13 @@ const WorkspacePage: NextPage = () => {
     // 切换项目ID
     setCurrentProjectId(projectId);
 
+    // 设置项目标题和状态
+    if (projectData) {
+      setProjectTitle(projectData.title || 'AI 图像生成');
+      setProjectStatus(projectData.status || 'draft');
+      setIsProjectShared(projectData.status === 'shared' || projectData.is_public);
+    }
+
     // 如果有项目数据，加载步骤
     if (projectData && projectData.steps) {
       const loadedSteps: Step[] = projectData.steps.map((step) => ({
@@ -382,9 +505,13 @@ const WorkspacePage: NextPage = () => {
     // 重置为空状态
     console.log('Creating new project');
     setCurrentProjectId(null);
+    setProjectTitle('AI 图像生成');
+    setProjectStatus('draft');
+    setIsProjectShared(false);
     setSteps([]);
     setUploadedImages([]);
     setError(null);
+    setIsEditingTitle(false);
     toast({
       title: "新项目",
       description: "已创建新项目，开始你的创作吧！",
@@ -413,10 +540,76 @@ const WorkspacePage: NextPage = () => {
         <div className="flex-1 flex flex-col h-full relative">
           {/* Header */}
           <div className="bg-black border-b border-gray-800 px-6 py-4 flex-shrink-0">
-            <div className="max-w-4xl mx-auto">
-              <h1 className="text-2xl font-bold text-white">
-                AI 图像生成
-              </h1>
+            <div className="max-w-4xl mx-auto flex items-center justify-between">
+              {/* Editable Title */}
+              <div className="flex items-center gap-2">
+                {isEditingTitle ? (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={tempTitle}
+                      onChange={(e) => setTempTitle(e.target.value)}
+                      className="text-xl font-bold bg-gray-800 border-gray-600 text-white"
+                      placeholder="输入项目标题"
+                      maxLength={100}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          handleSaveTitle();
+                        } else if (e.key === 'Escape') {
+                          handleCancelEditTitle();
+                        }
+                      }}
+                      autoFocus
+                    />
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={handleSaveTitle}
+                      className="text-green-400 hover:text-green-300"
+                    >
+                      <CheckIcon className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={handleCancelEditTitle}
+                      className="text-red-400 hover:text-red-300"
+                    >
+                      <XIcon className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-2xl font-bold text-white">
+                      {projectTitle}
+                    </h1>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={handleEditTitle}
+                      className="text-gray-400 hover:text-white"
+                    >
+                      <EditIcon className="w-4 h-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {/* Share Button - Only show if project has content */}
+              {currentProjectId && getAllGeneratedImages().length > 0 && (
+                <Button
+                  onClick={handleShareClick}
+                  variant="outline"
+                  className={
+                    isProjectShared
+                      ? "border-green-600 text-green-400 cursor-not-allowed"
+                      : "border-blue-600 text-blue-400 hover:bg-blue-600 hover:text-white"
+                  }
+                  disabled={isProjectShared}
+                >
+                  <ShareIcon className="w-4 h-4 mr-2" />
+                  {isProjectShared ? "已分享" : "分享到广场"}
+                </Button>
+              )}
             </div>
           </div>
 
@@ -469,6 +662,16 @@ const WorkspacePage: NextPage = () => {
             />
           </div>
         </div>
+
+        {/* Share Modal */}
+        <ShareModal
+          isOpen={isShareModalOpen}
+          onClose={() => setIsShareModalOpen(false)}
+          projectId={currentProjectId}
+          currentTitle={projectTitle}
+          generatedImages={getAllGeneratedImages()}
+          onShareSuccess={handleShareSuccess}
+        />
       </div>
     </>
   );
