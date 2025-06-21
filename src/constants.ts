@@ -14,16 +14,19 @@ export const JAAZ_IMAGE_MODELS_INFO = {
     name: "Imagen 4",
     description: "Google AI",
     price: 0.04,
+    isSupportImageInput: false,
   },
   "google/imagen-4-ultra": {
     name: "Imagen 4 Ultra",
     description: "Google AI",
     price: 0.06,
+    isSupportImageInput: false,
   },
   "black-forest-labs/flux-1.1-pro": {
     name: "Flux 1.1 Pro",
     description: "Black Forest Labs",
     price: 0.04,
+    isSupportImageInput: false,
   },
   // "wavespeed-ai/flux-kontext-pro/multi": {
   //   name: "Flux Kontext Pro",
@@ -34,26 +37,31 @@ export const JAAZ_IMAGE_MODELS_INFO = {
     name: "Flux Kontext Pro",
     description: "Black Forest Labs",
     price: 0.04,
+    isSupportImageInput: true,
   },
   "black-forest-labs/flux-kontext-max": {
     name: "Flux Kontext Max",
     description: "Black Forest Labs",
     price: 0.08,
+    isSupportImageInput: true,
   },
   "recraft-ai/recraft-v3": {
     name: "Recraft V3",
     description: "Recraft AI",
     price: 0.04,
+    isSupportImageInput: false,
   },
   "ideogram-ai/ideogram-v3-balanced": {
     name: "Ideogram V3 Balanced",
     description: "Ideogram AI",
     price: 0.06,
+    isSupportImageInput: false,
   },
   "openai/gpt-image-1": {
     name: "GPT Image 1",
     description: "OpenAI",
     price: 0.04,
+    isSupportImageInput: true,
   },
 };
 

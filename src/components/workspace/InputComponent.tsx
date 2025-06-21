@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { XIcon, ImageIcon, SendIcon } from 'lucide-react';
+import { JAAZ_IMAGE_MODELS_INFO } from '@/constants';
 
 interface UploadedImage {
   url: string;
@@ -52,6 +53,34 @@ export const InputComponent: React.FC<InputComponentProps> = ({
 
   // Only use the first uploaded image since we only support single image
   const uploadedImage = uploadedImages[0];
+
+  // Filter model options based on whether there's an uploaded image
+  const filteredModelOptions = uploadedImage
+    ? modelOptions.filter(option => JAAZ_IMAGE_MODELS_INFO[option.id]?.isSupportImageInput)
+    : modelOptions;
+
+  // Auto-switch to a supported model when image is uploaded/removed
+  useEffect(() => {
+    if (uploadedImage) {
+      // If there's an uploaded image and current model doesn't support image input
+      const currentModelSupportsImage = JAAZ_IMAGE_MODELS_INFO[model]?.isSupportImageInput;
+      if (!currentModelSupportsImage) {
+        // Find the first model that supports image input
+        const supportedModel = filteredModelOptions[0];
+        if (supportedModel) {
+          setModel(supportedModel.id);
+        }
+      }
+    } else {
+      // If no uploaded image, ensure we have a valid model selected
+      if (!modelOptions.find(option => option.id === model)) {
+        const firstModel = modelOptions[0];
+        if (firstModel) {
+          setModel(firstModel.id);
+        }
+      }
+    }
+  }, [uploadedImage, model, filteredModelOptions, modelOptions]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -223,7 +252,7 @@ export const InputComponent: React.FC<InputComponentProps> = ({
                 disabled={disabled}
                 className="px-2 py-1 bg-gray-700 border border-gray-600 text-white rounded text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-600"
               >
-                {modelOptions.map((option) => (
+                {filteredModelOptions.map((option) => (
                   <option key={option.id} value={option.id}>
                     {option.name}
                   </option>
