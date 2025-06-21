@@ -213,12 +213,15 @@ const WorkspacePage: NextPage = () => {
     setProjectStatus('shared');
   };
 
-  // Convert S3 URL to base64 data URL
+  // Convert S3 URL to base64 data URL using proxy API
   const convertS3UrlToBase64 = async (s3Url: string, format: string = 'png'): Promise<string> => {
     try {
-      const response = await fetch(s3Url);
+      // Use our proxy API to avoid CORS issues
+      const proxyUrl = `/api/image/proxy?url=${encodeURIComponent(s3Url)}`;
+      const response = await fetch(proxyUrl);
+
       if (!response.ok) {
-        throw new Error(`Failed to fetch image: ${response.status}`);
+        throw new Error(`Failed to fetch image via proxy: ${response.status}`);
       }
 
       const arrayBuffer = await response.arrayBuffer();
