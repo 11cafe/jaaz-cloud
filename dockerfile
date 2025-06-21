@@ -1,5 +1,5 @@
-# 使用 Node.js 18 Alpine 版本作为基础镜像
-FROM node:18-alpine AS runner
+# 使用 Node.js 22 Alpine 版本作为基础镜像
+FROM node:22-alpine AS runner
 WORKDIR /app
 
 # 设置生产环境
