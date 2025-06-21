@@ -20,6 +20,12 @@ const nextConfig = {
       },
       {
         protocol: "https",
+        hostname: "jaaz.s3.ap-northeast-1.amazonaws.com",
+        port: "",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
         hostname: "avatars.githubusercontent.com",
         port: "",
         pathname: "/**",
