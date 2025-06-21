@@ -71,7 +71,7 @@ export const InputComponent: React.FC<InputComponentProps> = ({
   };
 
   return (
-    <div className="fixed bottom-4 left-4 right-4">
+    <div className="absolute bottom-4 left-4 right-4">
       <div className="max-w-4xl mx-auto bg-gray-900/95 backdrop-blur-sm border border-gray-700 rounded-lg p-4">
         {/* Error Display */}
         {error && (

@@ -3,6 +3,7 @@ import { NextPage } from 'next';
 import Head from 'next/head';
 import { StepComponent } from '@/components/workspace/StepComponent';
 import { InputComponent } from '@/components/workspace/InputComponent';
+import { ProjectSidebar } from '@/components/workspace/ProjectSidebar';
 import { useToast } from '@/components/ui/use-toast';
 import {
   JAAZ_IMAGE_MODELS,
@@ -251,6 +252,30 @@ const WorkspacePage: NextPage = () => {
     setUploadedImages(uploadedImages.filter((_, i) => i !== index));
   };
 
+  const handleProjectSelect = (projectId: string) => {
+    // TODO: Load project data and steps
+    setCurrentProjectId(projectId);
+    console.log('Selected project:', projectId);
+    toast({
+      title: "项目已切换",
+      description: `已切换到项目: ${projectId}`,
+      variant: "success",
+    });
+  };
+
+  const handleNewProject = () => {
+    // TODO: Create new project
+    console.log('Creating new project');
+    setCurrentProjectId(null);
+    setSteps([]);
+    setUploadedImages([]);
+    toast({
+      title: "新项目",
+      description: "已创建新项目，开始你的创作吧！",
+      variant: "success",
+    });
+  };
+
   return (
     <>
       <Head>
@@ -258,60 +283,76 @@ const WorkspacePage: NextPage = () => {
         <meta name="description" content="AI-powered image generation workspace" />
       </Head>
 
-      <div className="min-h-screen bg-black">
-        {/* Header */}
-        <div className="bg-black border-b border-gray-800 px-6 py-4">
-          <div className="max-w-4xl mx-auto">
-            <h1 className="text-2xl font-bold text-white">
-              AI 图像生成
-            </h1>
-          </div>
+      <div className="w-full h-full bg-black flex overflow-hidden">
+        {/* Left Sidebar */}
+        <div className="flex-shrink-0 h-full">
+          <ProjectSidebar
+            currentProjectId={currentProjectId}
+            onProjectSelect={handleProjectSelect}
+            onNewProject={handleNewProject}
+          />
         </div>
 
-        {/* Main Content */}
-        <div className="max-w-4xl mx-auto px-6 py-8">
-          {/* Steps Container */}
-          <div className="space-y-6 pb-60"> {/* Bottom padding for fixed input */}
-            {steps.length === 0 ? (
-              <div className="text-center py-16">
-                <div className="w-16 h-16 mx-auto mb-4 bg-gray-800 rounded-full flex items-center justify-center">
-                  <span className="text-2xl">🎨</span>
-                </div>
-                <h3 className="text-lg font-medium text-white mb-2">
-                  开始你的创作之旅
-                </h3>
-                <p className="text-gray-400 mb-6">
-                  在下方输入框中描述你想要生成的图像，开始第一步创作
-                </p>
+        {/* Main Content Area */}
+        <div className="flex-1 flex flex-col h-full relative">
+          {/* Header */}
+          <div className="bg-black border-b border-gray-800 px-6 py-4 flex-shrink-0">
+            <div className="max-w-4xl mx-auto">
+              <h1 className="text-2xl font-bold text-white">
+                AI 图像生成
+              </h1>
+            </div>
+          </div>
+
+          {/* Main Content - Scrollable */}
+          <div className="flex-1 overflow-y-auto">
+            <div className="max-w-4xl mx-auto w-full px-6 py-8">
+              {/* Steps Container */}
+              <div className="space-y-6 pb-60"> {/* Bottom padding for fixed input */}
+                {steps.length === 0 ? (
+                  <div className="text-center py-16">
+                    <div className="w-16 h-16 mx-auto mb-4 bg-gray-800 rounded-full flex items-center justify-center">
+                      <span className="text-2xl">🎨</span>
+                    </div>
+                    <h3 className="text-lg font-medium text-white mb-2">
+                      开始你的创作之旅
+                    </h3>
+                    <p className="text-gray-400 mb-6">
+                      在下方输入框中描述你想要生成的图像，开始第一步创作
+                    </p>
+                  </div>
+                ) : (
+                  steps.map((step) => (
+                    <StepComponent
+                      key={step.id}
+                      prompt={step.prompt}
+                      outputImage={step.outputs?.[0]?.url}
+                      status={step.status}
+                    />
+                  ))
+                )}
               </div>
-            ) : (
-              steps.map((step) => (
-                <StepComponent
-                  key={step.id}
-                  prompt={step.prompt}
-                  outputImage={step.outputs?.[0]?.url}
-                  status={step.status}
-                />
-              ))
-            )}
+            </div>
+          </div>
+
+          {/* Fixed Input Component at Bottom */}
+          <div className="absolute bottom-0 left-0 right-0 flex-shrink-0">
+            <InputComponent
+              onSubmit={handleNewPrompt}
+              disabled={isGenerating}
+              placeholder="描述你想要生成或修改的图像..."
+              modelOptions={modelOptions}
+              sizeOptions={sizeOptions}
+              uploadedImages={uploadedImages}
+              onUploadClick={handleUploadClick}
+              onRemoveImage={removeUploadedImage}
+              onFileChange={handleFileChange}
+              isUploading={isUploading}
+              error={error}
+              fileInputRef={fileInputRef}
+            />
           </div>
         </div>
-
-        {/* Fixed Input Component at Bottom */}
-        <InputComponent
-          onSubmit={handleNewPrompt}
-          disabled={isGenerating}
-          placeholder="描述你想要生成或修改的图像..."
-          modelOptions={modelOptions}
-          sizeOptions={sizeOptions}
-          uploadedImages={uploadedImages}
-          onUploadClick={handleUploadClick}
-          onRemoveImage={removeUploadedImage}
-          onFileChange={handleFileChange}
-          isUploading={isUploading}
-          error={error}
-          fileInputRef={fileInputRef}
-        />
       </div>
     </>
   );
