@@ -1,10 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { NextPage } from 'next';
 import Head from 'next/head';
 import { StepComponent } from '@/components/workspace/StepComponent';
 import { InputComponent } from '@/components/workspace/InputComponent';
+import { useToast } from '@/components/ui/use-toast';
+import {
+  JAAZ_IMAGE_MODELS,
+  JAAZ_IMAGE_MODELS_INFO,
+  IMAGE_RATIO_OPTIONS,
+} from '@/constants';
 
-// Mock data structure based on project schema
+// Data structure based on project schema
 interface Step {
   id: string;
   project_id: string;
@@ -33,84 +39,53 @@ interface Step {
   updated_at: string;
 }
 
-const WorkspacePage: NextPage = () => {
-  // Mock project data
-  const [steps, setSteps] = useState<Step[]>([
-    {
-      id: 'step-1',
-      project_id: 'project-1',
-      step_order: 1,
-      prompt: '骑士的旁边是哈士奇',
-      model: 'midjourney',
-      parameters: {
-        aspect_ratio: '1:1',
-        quality: 'standard',
-      },
-      status: 'completed',
-      outputs: [
-        {
-          id: 'output-1',
-          url: 'https://picsum.photos/512/512?random=1',
-          type: 'image',
-          format: 'jpg',
-          order: 0,
-        }
-      ],
-      created_at: '2024-01-20T10:00:00Z',
-      updated_at: '2024-01-20T10:02:00Z',
-    },
-    {
-      id: 'step-2',
-      project_id: 'project-1',
-      step_order: 2,
-      prompt: '人物换成成人',
-      model: 'midjourney',
-      parameters: {
-        aspect_ratio: '1:1',
-        quality: 'standard',
-      },
-      status: 'completed',
-      outputs: [
-        {
-          id: 'output-2',
-          url: 'https://picsum.photos/512/512?random=2',
-          type: 'image',
-          format: 'jpg',
-          order: 0,
-        }
-      ],
-      created_at: '2024-01-20T10:05:00Z',
-      updated_at: '2024-01-20T10:07:00Z',
-    },
-    {
-      id: 'step-3',
-      project_id: 'project-1',
-      step_order: 3,
-      prompt: '生成一张伯人',
-      model: 'midjourney',
-      parameters: {
-        aspect_ratio: '16:9',
-        quality: 'high',
-      },
-      status: 'running',
-      created_at: '2024-01-20T10:10:00Z',
-      updated_at: '2024-01-20T10:10:00Z',
-    }
-  ]);
+interface UploadedImage {
+  url: string;
+  filename: string;
+}
 
+// Model and size options from constants
+const modelOptions = JAAZ_IMAGE_MODELS.map((modelId) => ({
+  id: modelId,
+  name: JAAZ_IMAGE_MODELS_INFO[modelId].name,
+  description: JAAZ_IMAGE_MODELS_INFO[modelId].description,
+  price: JAAZ_IMAGE_MODELS_INFO[modelId].price,
+}));
+
+const sizeOptions = Object.entries(IMAGE_RATIO_OPTIONS).map(([id, config]) => ({
+  id,
+  name: (config as { label: string }).label,
+}));
+
+const WorkspacePage: NextPage = () => {
+  // State management
+  const [steps, setSteps] = useState<Step[]>([]);
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
 
   const handleNewPrompt = async (prompt: string, parameters: any) => {
-    setIsGenerating(true);
+    if (!prompt.trim()) return;
 
-    // Create new step
+    setIsGenerating(true);
+    setError(null);
+
+    // Create new step with pending status
     const newStep: Step = {
       id: `step-${Date.now()}`,
-      project_id: 'project-1',
+      project_id: currentProjectId || 'temp',
       step_order: steps.length + 1,
       prompt: prompt,
-      model: parameters.model,
-      parameters: parameters,
+      model: parameters.model || modelOptions[0].id,
+      parameters: {
+        aspect_ratio: parameters.aspect_ratio || sizeOptions[0].id,
+        quality: parameters.quality || 'standard',
+        ...parameters,
+      },
       status: 'running',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -118,28 +93,162 @@ const WorkspacePage: NextPage = () => {
 
     setSteps(prev => [...prev, newStep]);
 
-    // Simulate API call - replace with actual implementation
-    setTimeout(() => {
+    try {
+      // Call the generate API
+      const response = await fetch("/api/image/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt,
+          model: parameters.model || modelOptions[0].id,
+          aspect_ratio: parameters.aspect_ratio || sizeOptions[0].id,
+          input_images: uploadedImages.map((image) => image.url),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Generation failed");
+      }
+
+      if (data.success && data.data) {
+        // Update the step with completed status and output
+        setSteps(prev => prev.map(step =>
+          step.id === newStep.id
+            ? {
+              ...step,
+              status: 'completed' as const,
+              project_id: data.data.project_id,
+              outputs: [
+                {
+                  id: data.data.output_id,
+                  url: data.data.image_url,
+                  type: 'image',
+                  format: data.data.metadata?.format || 'png',
+                  order: 0,
+                }
+              ],
+              updated_at: new Date().toISOString(),
+            }
+            : step
+        ));
+
+        // Set current project ID if it's the first step
+        if (!currentProjectId) {
+          setCurrentProjectId(data.data.project_id);
+        }
+
+        toast({
+          title: "生成成功",
+          description: "图像已成功生成！",
+          variant: "success",
+        });
+      } else {
+        throw new Error("No image data received");
+      }
+    } catch (err) {
+      console.error("Generation error:", err);
+      const errorMessage = err instanceof Error ? err.message : "生成失败，请重试";
+      setError(errorMessage);
+
+      // Update step status to failed
       setSteps(prev => prev.map(step =>
         step.id === newStep.id
           ? {
             ...step,
-            status: 'completed' as const,
-            outputs: [
-              {
-                id: `output-${Date.now()}`,
-                url: `https://picsum.photos/512/512?random=${Date.now()}`,
-                type: 'image',
-                format: 'jpg',
-                order: 0,
-              }
-            ],
+            status: 'failed' as const,
+            error_message: errorMessage,
             updated_at: new Date().toISOString(),
           }
           : step
       ));
+
+      toast({
+        title: "生成失败",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
       setIsGenerating(false);
-    }, 3000);
+    }
+  };
+
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    // File count limit
+    const maxFiles = 5;
+    const currentCount = uploadedImages.length;
+    const newFilesCount = files.length;
+
+    if (currentCount + newFilesCount > maxFiles) {
+      setError(`最多只能上传${maxFiles}张图片`);
+      toast({
+        title: "上传失败",
+        description: `最多只能上传${maxFiles}张图片，当前已有${currentCount}张`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsUploading(true);
+    setError(null);
+
+    try {
+      const newImagePromises = Array.from(files).map((file) => {
+        return new Promise<UploadedImage>((resolve, reject) => {
+          // File type check
+          if (!file.type.startsWith('image/')) {
+            reject(new Error(`文件 "${file.name}" 不是有效的图片格式`));
+            return;
+          }
+
+          const reader = new FileReader();
+          reader.onload = () =>
+            resolve({ url: reader.result as string, filename: file.name });
+          reader.onerror = () => reject(new Error(`读取文件 "${file.name}" 失败`));
+          reader.readAsDataURL(file);
+        });
+      });
+
+      const newImages = await Promise.all(newImagePromises);
+      setUploadedImages((prev) => [...prev, ...newImages]);
+
+      toast({
+        title: "加载成功",
+        description: `${newImages.length}张图片已加载。`,
+        variant: "success",
+      });
+    } catch (err) {
+      console.error("File loading error:", err);
+      const errorMessage = err instanceof Error ? err.message : "读取文件失败，请重试";
+      setError(errorMessage);
+      toast({
+        title: "加载失败",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
+  const removeUploadedImage = (index: number) => {
+    setUploadedImages(uploadedImages.filter((_, i) => i !== index));
   };
 
   return (
@@ -193,13 +302,20 @@ const WorkspacePage: NextPage = () => {
           onSubmit={handleNewPrompt}
           disabled={isGenerating}
           placeholder="描述你想要生成或修改的图像..."
+          modelOptions={modelOptions}
+          sizeOptions={sizeOptions}
+          uploadedImages={uploadedImages}
+          onUploadClick={handleUploadClick}
+          onRemoveImage={removeUploadedImage}
+          onFileChange={handleFileChange}
+          isUploading={isUploading}
+          error={error}
+          fileInputRef={fileInputRef}
         />
       </div>
     </>
   );
 };
 
-// Mark this page as not needing the default layout
-// (WorkspacePage as any).noLayout = true;
 
 export default WorkspacePage;
