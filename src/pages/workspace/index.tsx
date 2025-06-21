@@ -5,6 +5,7 @@ import { StepComponent } from '@/components/workspace/StepComponent';
 import { InputComponent } from '@/components/workspace/InputComponent';
 import { ProjectSidebar } from '@/components/workspace/ProjectSidebar';
 import { useToast } from '@/components/ui/use-toast';
+import { ProjectDetail } from '@/types/project';
 import {
   JAAZ_IMAGE_MODELS,
   JAAZ_IMAGE_MODELS_INFO,
@@ -259,13 +260,49 @@ const WorkspacePage: NextPage = () => {
     setUploadedImages(uploadedImages.filter((_, i) => i !== index));
   };
 
-  const handleProjectSelect = (projectId: string) => {
-    // 暂时只切换项目ID，不加载历史数据
+  const handleProjectSelect = (projectId: string, projectData?: ProjectDetail) => {
+    // 切换项目ID
     setCurrentProjectId(projectId);
-    console.log('Selected project:', projectId);
+
+    // 如果有项目数据，加载步骤
+    if (projectData && projectData.steps) {
+      const loadedSteps: Step[] = projectData.steps.map((step) => ({
+        id: step.id,
+        project_id: projectId,
+        step_order: step.step_order,
+        prompt: step.prompt || '',
+        model: step.model || '',
+        inputs: step.inputs as string[] | undefined,
+        parameters: step.parameters || {},
+        status: step.status,
+        outputs: step.outputs?.map((output) => ({
+          id: output.id,
+          url: output.url,
+          type: output.type,
+          format: output.format || 'png',
+          order: output.order,
+          metadata: output.metadata,
+        })),
+        cost: step.cost,
+        error_message: step.error_message,
+        created_at: step.created_at,
+        updated_at: step.updated_at,
+      }));
+
+      setSteps(loadedSteps);
+      console.log(`Loaded ${loadedSteps.length} steps for project:`, projectId);
+    } else {
+      // 如果没有项目数据，清空步骤
+      setSteps([]);
+    }
+
+    // 清空上传的图片和错误状态
+    setUploadedImages([]);
+    setError(null);
+
     toast({
       title: "项目已切换",
-      description: `已切换到项目: ${projectId}`,
+      description: `已切换到项目并加载了${projectData?.steps?.length || 0}个步骤`,
       variant: "success",
     });
   };

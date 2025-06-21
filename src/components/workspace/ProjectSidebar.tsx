@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { PlusIcon, ChevronLeftIcon, ChevronRightIcon, ImageIcon, LoaderIcon, AlertCircleIcon } from 'lucide-react';
-import { Project } from '@/types/project';
+import { Project, ProjectDetail } from '@/types/project';
 
 interface ProjectSidebarProps {
   currentProjectId?: string | null;
-  onProjectSelect?: (projectId: string) => void;
-  onNewProject?: (project: Project) => void;
+  onProjectSelect?: (projectId: string, projectData?: ProjectDetail) => void;
+  onNewProject?: (project?: Project) => void;
 }
 
 export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
@@ -18,6 +18,7 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [loadingProjectId, setLoadingProjectId] = useState<string | null>(null);
 
   // Format project date
   const formatDate = (dateString: string) => {
@@ -30,6 +31,27 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
     if (diffDays === 2) return '昨天';
     if (diffDays <= 7) return `${diffDays - 1}天前`;
     return date.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' });
+  };
+
+  // Load project details
+  const loadProjectDetails = async (projectId: string): Promise<ProjectDetail | null> => {
+    try {
+      const response = await fetch(`/api/project/${projectId}`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to load project details');
+      }
+
+      return result.data;
+    } catch (err) {
+      console.error('Failed to load project details:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load project details');
+      return null;
+    }
   };
 
   // Load projects from API
@@ -102,8 +124,19 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
     loadProjects();
   }, []);
 
-  const handleProjectClick = (projectId: string) => {
-    onProjectSelect?.(projectId);
+  const handleProjectClick = async (projectId: string) => {
+    try {
+      setLoadingProjectId(projectId);
+      const projectData = await loadProjectDetails(projectId);
+      if (projectData) {
+        onProjectSelect?.(projectId, projectData);
+      }
+    } catch (err) {
+      console.error('Failed to load project details:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load project details');
+    } finally {
+      setLoadingProjectId(null);
+    }
   };
 
   const handleRetry = () => {
@@ -196,8 +229,9 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
               <button
                 key={project.id}
                 onClick={() => handleProjectClick(project.id)}
+                disabled={loadingProjectId === project.id}
                 className={`
-                   w-12 h-8 rounded-md overflow-hidden border-2 transition-all hover:scale-105
+                   relative w-12 h-8 rounded-md overflow-hidden border-2 transition-all hover:scale-105 disabled:opacity-50
                    ${currentProjectId === project.id
                     ? 'border-blue-500 ring-2 ring-blue-500/20'
                     : 'border-gray-600 hover:border-gray-500'
@@ -216,6 +250,12 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
                     <ImageIcon className="w-4 h-4 text-gray-400" />
                   </div>
                 )}
+                {/* Loading overlay */}
+                {loadingProjectId === project.id && (
+                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                    <LoaderIcon className="w-3 h-3 text-white animate-spin" />
+                  </div>
+                )}
               </button>
             ))}
           </div>
@@ -226,8 +266,9 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
               <button
                 key={project.id}
                 onClick={() => handleProjectClick(project.id)}
+                disabled={loadingProjectId === project.id}
                 className={`
-                   w-full text-left rounded-lg border transition-all hover:bg-gray-800
+                   relative w-full text-left rounded-lg border transition-all hover:bg-gray-800 disabled:opacity-50
                    ${currentProjectId === project.id
                     ? 'bg-gray-800 border-blue-500 ring-1 ring-blue-500/20'
                     : 'bg-gray-900/50 border-gray-700 hover:border-gray-600'
@@ -260,6 +301,13 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
                     </span>
                   </div>
                 </div>
+
+                {/* Loading overlay */}
+                {loadingProjectId === project.id && (
+                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-lg">
+                    <LoaderIcon className="w-6 h-6 text-white animate-spin" />
+                  </div>
+                )}
               </button>
             ))}
 
